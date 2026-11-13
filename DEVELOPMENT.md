@@ -2,13 +2,73 @@
 
 ## Current checkpoint
 
-**Phase 2 — operating system simulation engine: implemented and tested.** The work in this phase adds process management, scheduling algorithms, a deterministic tick engine, simulated contiguous memory, and structured events. Phase 3 persistence/REST workflows and frontend are not started.
+**Phase 3 — JSON persistence and REST API: complete.** Phases 1–3 are implemented and tested. Do not start Phase 4/frontend until the user reviews this checkpoint.
 
-## Environment
+## Phase 3 implementation
 
-This Codex session still resolves `java` to Java 8.0.481 and cannot find `javac` or `mvn` on inherited `PATH`. JDK 21.0.13 is installed at `C:\Program Files\Eclipse Adoptium\jdk-21.0.13.9-hotspot`. To run the build here, Maven 3.10.0 was downloaded to `%TEMP%\kernelx-build-tools\apache-maven-3.10.0` and its published SHA-512 checksum verified. With the paths set, commands reported Java 21.0.13, javac 21.0.13, and Maven 3.10.0.
+### JSON persistence
 
-If the tools do not resolve in a new PowerShell terminal, use:
+- `backend/data/simulations.json`: completed-run snapshots containing schedule options, Gantt segments, process snapshots/metrics, memory state, and event history.
+- `backend/data/configurations.json`: named algorithm, quantum, priority-mode, memory, and speed settings.
+- `backend/data/event_logs.json`: structured persistent `SystemEvent` records.
+- Separate archive/configuration/event services use `JsonFileRepository<T>`; records are persistence DTOs and do not capture custom DSA internals.
+- Missing files/directories are created. Invalid JSON or wrong-root/null records are quarantined as `.corrupt-<uuid>.json`, then the active file is initialized to an empty array. Original corrupted bytes remain available.
+- Writes are synchronized per repository, written to a unique same-directory temporary file, flushed, then replaced atomically where supported (replacement move is the fallback).
+- API tests and JSON repository tests use isolated temporary directories. Tests do not read or overwrite the real backend data files.
+
+### REST and runtime safety
+
+- Process, simulation, scheduling, memory, event, archive, and configuration controllers expose the routes documented in `API.md`.
+- `SimulationRuntimeService` is the singleton API boundary for one session. Its synchronized methods serialize process mutations, ticks, and snapshots. Process and memory edits are rejected while a run is active/paused so the start-time scheduling plan remains consistent.
+- `@RestControllerAdvice` returns one error DTO and maps invalid input to 400, missing resources to 404, invalid lifecycle/resource conflicts to 409, and storage/unexpected failures to a generic 500 response without stack traces.
+- Central CORS policy allows the future Vite origin `http://localhost:5173`.
+- `server.port` defaults to 8081 and can be changed with `SERVER_PORT`.
+
+## Architecture
+
+```text
+REST controllers
+  ├── SimulationRuntimeService (single synchronized in-memory session)
+  │   ├── ProcessManager → Custom LinkedList + HashTable + ProcessTree
+  │   ├── SimulationEngine → SchedulingService → Custom Queue / MaxHeap
+  │   └── MemoryManager + EventManager
+  ├── SimulationArchiveService → simulations.json
+  ├── ConfigurationStoreService → configurations.json
+  └── EventLogPersistenceService → event_logs.json
+
+GlobalExceptionHandler + centralized CORS
+```
+
+The simulation engine remains independent of Spring. The REST layer reads DTO snapshots and does not serialize live linked lists, queues, heaps, hash buckets, or tree nodes.
+
+## Files added or changed in Phase 3
+
+- `backend/pom.xml`: Jakarta Bean Validation starter.
+- `backend/src/main/resources/application.properties`: port, storage directory, and default-memory environment properties.
+- `backend/src/main/java/com/kernelx/config/KernelXConfiguration.java`, `CorsConfiguration.java`.
+- REST controllers: `ProcessController.java`, `SimulationController.java`, `MemoryController.java`, `SavedSimulationController.java`, `ConfigurationController.java`.
+- API DTOs under `backend/src/main/java/com/kernelx/dto/`, including request/response and saved-snapshot types.
+- `backend/src/main/java/com/kernelx/exception/GlobalExceptionHandler.java`.
+- `backend/src/main/java/com/kernelx/persistence/JsonFileRepository.java`, `PersistenceException.java`.
+- Services added: `SimulationRuntimeService.java`, `SimulationArchiveService.java`, `ConfigurationStoreService.java`, `EventLogPersistenceService.java`; `EventManager.java` now supports a persistence sink.
+- `backend/data/simulations.json`, `configurations.json`, `event_logs.json`.
+- Tests: `Phase3ApiIntegrationTest.java`, `JsonFileRepositoryTest.java`; `KernelXApplicationTests.java` now directs storage to a temporary directory.
+- Documentation: `API.md`, `README.md`, and this file.
+
+## API reference
+
+See [API.md](API.md) for every route, body/response examples, success/error statuses, filters, CORS, PowerShell requests, and persistence details. Routes are grouped under:
+
+- `/api/processes`
+- `/api/simulation` (lifecycle, scheduling, Gantt, metrics, event history)
+- `/api/memory`
+- `/api/simulations`
+- `/api/configurations`
+- `/api/health`
+
+## Environment and commands (Windows PowerShell)
+
+This Codex shell inherits Java 8 on PATH and does not resolve `javac`/`mvn`, although JDK 21.0.13 is installed at `C:\Program Files\Eclipse Adoptium\jdk-21.0.13.9-hotspot`. The verified build used Apache Maven 3.10.0 in `%TEMP%\kernelx-build-tools\apache-maven-3.10.0`. Configure the current terminal if necessary:
 
 ```powershell
 $env:JAVA_HOME = 'C:\Program Files\Eclipse Adoptium\jdk-21.0.13.9-hotspot'
@@ -19,107 +79,55 @@ javac -version
 mvn -version
 ```
 
-For a permanent setup, point `JAVA_HOME` and `MAVEN_HOME` at the installed directories and add their `bin` folders to Windows `PATH`.
-
-## Phase 2 architecture
-
-```text
-ProcessManager
-  ├── ProcessLinkedList       # canonical ordered PCB storage
-  ├── CustomHashTable         # PID lookup
-  └── ProcessTree             # multiple process roots and parent-child hierarchy
-
-SimulationEngine (Spring-independent)
-  ├── SchedulingService       # deterministic complete schedule + metrics/Gantt DTOs
-  │   ├── CustomQueue         # FCFS and Round Robin ready set
-  │   └── MaxHeap             # SJF and priority ready set
-  ├── MemoryManager           # linked contiguous blocks; fit strategies and coalescing
-  └── EventManager            # structured events held in CustomQueue
-```
-
-`SchedulingService` is pure with respect to live PCBs: it schedules immutable `SchedulingProcess` inputs and returns `SchedulingResult`. `SimulationEngine` takes that deterministic plan and advances its half-open Gantt intervals one tick at a time. No wall-clock timers, host CPU measurements, database, persistence, or frontend were introduced.
-
-### Scheduling behavior
-
-- **FCFS:** FIFO, non-preemptive. Processes order by arrival time and then lower PID.
-- **SJF:** non-preemptive; chooses the shortest original burst among arrived ready processes. Ties choose earlier arrival then lower PID.
-- **Round Robin:** FIFO with a required positive quantum. Arrivals at a quantum boundary are queued before the expired process is reinserted.
-- **Priority:** higher numeric value wins. Equal priorities choose earlier arrival, then lower PID. Preemptive mode switches only when a strictly higher priority arrives; non-preemptive mode waits for completion.
-- Every mode includes idle intervals and computes completion, turnaround, waiting, and response times plus averages.
-
-The Phase 1 process tree now supports a forest (multiple independent roots), which reflects independent operating system processes while retaining the existing first-child/next-sibling implementation.
-
-### Memory and event behavior
-
-Memory is a simulated contiguous address space, not machine RAM. First/Best/Worst Fit select a sufficient free block; allocations split it and deallocation merges adjacent free blocks. Allocation fails if there is no contiguous block large enough, even if total free memory would otherwise be sufficient.
-
-Events are typed `SystemEvent` records with sequence ID, simulation time, optional PID, type, and description. Process, state, scheduling, priority, memory, crash, CPU-idle, and simulation-control events are recorded.
-
-## Files added or modified in Phase 2
-
-- Modified `backend/src/main/java/com/kernelx/model/ProcessControlBlock.java` and `ProcessState.java`: completion/wait/turnaround/response fields, start/completion/reset helpers, and PAUSED state.
-- Added models under `backend/src/main/java/com/kernelx/model/`: `SchedulingAlgorithm`, `SchedulingProcess`, `GanttSegment`, `ProcessMetrics`, `SchedulingResult`, `SimulationStatus`, `SimulationSnapshot`, `SimulationConfiguration`, memory DTOs/strategy, and system event DTO/type.
-- Added services under `backend/src/main/java/com/kernelx/service/`: `ProcessManager`, `SchedulingService`, `SimulationEngine`, `MemoryManager`, `EventManager`.
-- Modified `backend/src/main/java/com/kernelx/dsa/ProcessTree.java` to support independent roots; retained existing structure and tests.
-- Added scheduler, manager, memory, and engine tests under `backend/src/test/java/com/kernelx/service/`; extended `ProcessTreeTest` with multiple-root coverage.
-- Updated `README.md` with algorithms, sample output, commands, test result, and limitations.
-
-## Run and test (Windows PowerShell)
-
-Set environment paths first if required using the commands under Environment. Then run the complete backend suite:
+Run all tests:
 
 ```powershell
 cd C:\Users\atsid\OneDrive\Desktop\KernelX\backend
 mvn test
 ```
 
-Start Spring Boot:
+Start on the Phase 3 default port (8081):
 
 ```powershell
 cd C:\Users\atsid\OneDrive\Desktop\KernelX\backend
 mvn spring-boot:run
 ```
 
-The current Spring web endpoint is `GET http://localhost:8080/api/health`. Phase 2 services are independent Java services and have not yet been exposed as REST endpoints.
+Health check: `http://localhost:8081/api/health`.
 
-Port 8080 was already occupied during the startup check. The backend started on 8081 with `mvn spring-boot:run "-Dspring-boot.run.arguments=--server.port=8081"`, and `GET http://localhost:8081/api/health` returned HTTP 200 with `status: UP`.
+If the port is already in use, set a different one:
 
-Phase 2 verification: `mvn test` — **24 tests, 0 failures, 0 errors, 0 skipped**, including the Phase 1 data structure suite. `mvn clean test` initially could not remove a compiled class directory under the OneDrive workspace, so the successful complete verification used `mvn test`, which recompiled changed source/test classes and ran all tests. If this clean failure occurs on your machine, close any process holding backend `target` files and rerun `mvn clean test`; plain `mvn test` is sufficient to verify changes.
-
-## Sample scheduling run
-
-Preemptive priority inputs:
-
-```text
-P1: priority 2, arrival 0, burst 5
-P2: priority 5, arrival 2, burst 2
-P3: priority 5, arrival 2, burst 1
+```powershell
+$env:SERVER_PORT = '8082'
+mvn spring-boot:run
 ```
 
-Tie policy selects lower PID, producing these Gantt intervals:
+In this environment, port 8081 was occupied. The app was started on 8082; `GET /api/health` returned HTTP 200 with `status: UP`, and `GET /api/memory` returned the initialized simulated memory map.
 
-```text
-PID 1 [0,2) → PID 2 [2,4) → PID 3 [4,5) → PID 1 [5,8)
-```
+The running application writes to `backend/data/` when started from the backend directory. For an alternate path, set `$env:KERNELX_DATA_DIRECTORY = 'C:\path\to\kernelx-data'` before startup.
 
-P1 metrics: completion 8, turnaround 8, waiting 3, response 0. P2: 4, 2, 0, 0. P3: 5, 3, 2, 2. Structured sample JSON is in `README.md`.
+## Test results
+
+Final complete run: `mvn test` on Java 21.0.13 / Maven 3.10.0 — **29 tests, 0 failures, 0 errors, 0 skipped**. It includes all Phase 1 and Phase 2 suites; JSON file creation, serialization, corruption quarantine, and concurrent writes; API integration across process/simulation/scheduling/memory/events/save/configuration routes; validation and lifecycle conflicts; and CORS preflight.
+
+The API integration tests use real Spring controllers, services, runtime, Jackson repositories, and temporary JSON files; they do not mock API results.
 
 ## Known limits
 
-- Scheduling plan is created at simulation start. Process creation, pause/resume, or priority changes do not re-plan a running simulation; apply process changes before starting or reset first.
-- Speed is metadata for a future UI; callers explicitly request ticks and no timer sleeps are used.
-- Memory allocations are explicit; a failed allocation does not automatically block/retry the process.
-- The Spring app exposes only the Phase 1 health route; process management and simulation are not yet wired to REST.
-- No simulation REST endpoints, JSON persistence, or React frontend have been implemented.
+- One in-memory simulation session per application process. Synchronization protects that process; multiple replicas must not share JSON files.
+- A run’s schedule is computed at start; process mutations are locked while running/paused. Reset before changing the process set or priorities.
+- Ticks are explicitly driven. Speed is metadata for a future polling UI, not a background timer.
+- Memory allocations are explicit. Failed allocation reports 409 and does not automatically queue/retry the process.
+- No frontend, simulation REST authentication, database, distributed locking, or saved-configuration apply route is included.
 
 ## Phase plan
 
-1. Backend foundation and custom DSA — complete.
-2. Operating system simulation engine — complete.
-3. JSON persistence and REST APIs — not started.
+1. Backend foundation and DSA — complete.
+2. Simulation engine — complete.
+3. JSON persistence and REST API — complete.
 4. Frontend foundation — not started.
 5. Dashboard and visualizations — not started.
 6. Integration and polishing — not started.
-7. Final documentation — not started.
+7. Final documentation and demo workflow — not started.
 
-Pause for review before Phase 3.
+Pause for review before Phase 4.

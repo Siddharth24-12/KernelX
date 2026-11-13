@@ -1,80 +1,72 @@
 # KernelX — Intelligent OS Scheduling Simulator
 
-KernelX is a DSA-focused operating system scheduling simulator. Its backend demonstrates custom process data structures, deterministic CPU scheduling, event history, and contiguous simulated memory allocation.
+KernelX is a DSA-centered operating system scheduling simulator. The backend now includes custom data structures, a deterministic simulation engine, JSON persistence, and REST APIs. It deliberately simulates CPU and memory; it does not report measurements from the host computer.
 
-> **Status:** Phase 1 and Phase 2 are complete. The REST API for simulation workflows, JSON persistence, and frontend have not started.
+> **Status:** Phases 1–3 complete. React/frontend work has not started.
 
-## Phase 2 features
+## Features
 
-- `ProcessManager` uses the Phase 1 custom linked list, PID hash table, and process tree. It creates, searches, lists, pauses/resumes, reprioritizes, terminates, and crashes processes. Terminating a parent cascades to descendants and releases their simulated memory.
-- `SchedulingService` provides FCFS, non-preemptive SJF, Round Robin, and priority scheduling. Priority supports preemptive and non-preemptive modes.
-- Every schedule returns process completion, turnaround, waiting, and response times, averages, total elapsed time, and structured Gantt segments. Idle periods are explicit.
-- The Spring-independent `SimulationEngine` starts a schedule and advances it by deterministic ticks. It supports pause, resume, reset, single/multiple ticks, simulation speed metadata, current state, and memory operations. It does not measure host CPU or sleep between ticks.
-- `MemoryManager` uses a manually linked contiguous block list and supports First Fit, Best Fit, Worst Fit, allocation, deallocation, fragmentation, and adjacent free-block coalescing.
-- `EventManager` stores typed events in the custom queue, including process lifecycle, scheduling, state transitions, memory, crash, and priority events.
+- Process management backed by the custom linked list, PID hash table, and process forest. Supports create, lookup/list, priority changes, pause/resume, termination, and crash handling in the service layer.
+- FCFS, non-preemptive SJF, Round Robin, and preemptive/non-preemptive priority scheduling. Reports completion, turnaround, waiting, and response metrics, averages, and Gantt segments including CPU idle intervals.
+- Synchronized single-session simulation controls: start, pause, resume, step, reset, and read state.
+- First Fit, Best Fit, and Worst Fit contiguous simulated memory with fragmentation reporting and free-block coalescing.
+- Typed event history persisted as JSON.
+- Save/list/retrieve/delete completed simulation records and named scheduler configurations.
+- JSON writes use temporary files and atomic replacement when supported. Corrupt files are quarantined for recovery.
+- REST errors share a safe JSON response; CORS is configured for `http://localhost:5173`.
 
-## Scheduling policies
+See [API.md](API.md) for the complete request/response reference and examples.
 
-| Algorithm | Ready structure | Policy / tie-breaking |
-|---|---|---|
-| FCFS | Custom FIFO queue | Arrival time, then lower PID; non-preemptive |
-| SJF | Custom max heap with reversed comparator | Shortest original burst, then earlier arrival, then lower PID; non-preemptive |
-| Round Robin | Custom FIFO queue | Configurable positive quantum; arrivals at a quantum boundary join before the expired process |
-| Priority | Custom max heap | Larger numeric priority wins; ties prefer earlier arrival, then lower PID. Preemptive mode yields only to a strictly higher priority. |
+## DSA implementation
 
-All schedules handle arrivals after time zero and emit idle segments. Metrics use `turnaround = completion - arrival`, `waiting = turnaround - burst`, and `response = first start - arrival`.
+- `ProcessLinkedList`: PCB storage; PID operations O(n).
+- `CustomQueue<T>`: FIFO ready/event storage; enqueue/dequeue O(1).
+- `MaxHeap<T>`: priority and SJF ready sets; insert/extract O(log n), peek O(1).
+- `CustomHashTable<K,V>`: PID index using separate chaining and resizing; average lookup O(1).
+- `ProcessTree`: process hierarchy with independent roots; add/search/removal O(n).
+- `MemoryManager`: manual linked block list; fit allocation and coalescing O(b) for b blocks.
 
-### Sample preemptive-priority result
+The new persistence layer stores DTO snapshots and never serializes the live custom structures.
 
-Input: P1 priority 2 arrives at 0 with burst 5; P2 priority 5 arrives at 2 with burst 2; P3 priority 5 arrives at 2 with burst 1. Equal priorities choose lower PID.
-
-```json
-[
-  {"pid":1,"processName":"P1","startTime":0,"endTime":2,"duration":2,"idle":false},
-  {"pid":2,"processName":"P2","startTime":2,"endTime":4,"duration":2,"idle":false},
-  {"pid":3,"processName":"P3","startTime":4,"endTime":5,"duration":1,"idle":false},
-  {"pid":1,"processName":"P1","startTime":5,"endTime":8,"duration":3,"idle":false}
-]
-```
-
-P1 metrics: completion 8, turnaround 8, waiting 3, response 0. P2: 4, 2, 0, 0. P3: 5, 3, 2, 2.
-
-## Memory model
-
-Memory is a simulated address range, not host RAM. Allocation splits free contiguous blocks. First Fit selects the first sufficient block; Best Fit selects the smallest sufficient block; Worst Fit selects the largest sufficient block. Deallocation merges adjacent free regions. Total, allocated, free, block addresses, and PID mappings are available in a snapshot. A request can fail when total free space is sufficient but fragmented into smaller blocks.
-
-## DSA and complexity
-
-Phase 1 core structures remain custom implementations: `ProcessLinkedList`, `CustomQueue`, `MaxHeap`, `CustomHashTable`, and `ProcessTree` (now supports multiple independent process roots). The new memory allocator is also a manually linked block list. Java collections are used only for method inputs/results and reporting DTOs, not as replacements for core DSA storage.
-
-- PCB linked list: search/removal/update O(n); insertion O(n) due to duplicate-PID check.
-- Queue: enqueue/dequeue/peek O(1); traversal O(n).
-- Heap: insert/extract O(log n), peek O(1), heapify O(n); update search O(n) + repair O(log n).
-- Chained hash table: average put/get/remove O(1), worst O(n); insertion resizing is amortized O(1).
-- Process tree: add/search/removal O(n); pre-order traversal O(n).
-- Memory blocks: allocation/deallocation O(b) for b blocks; coalescing O(b).
-- Scheduling: arrival sort O(n log n); execution visits each simulated CPU tick, with ready heap operations O(log n). Space is O(n + g), where g is Gantt segment count.
-
-## Backend structure
+## Project layout
 
 ```text
 backend/
-├── pom.xml
-└── src/
-    ├── main/java/com/kernelx/
-    │   ├── KernelXApplication.java
-    │   ├── controller/HealthController.java
-    │   ├── dsa/                    # Phase 1 custom structures
-    │   ├── model/                  # PCB, metrics, scheduling, memory, events, state DTOs
-    │   └── service/                # ProcessManager, SchedulingService, SimulationEngine, MemoryManager, EventManager
-    └── test/java/com/kernelx/     # DSA, engine, scheduler, memory, and Spring tests
+├── data/
+│   ├── simulations.json
+│   ├── configurations.json
+│   └── event_logs.json
+├── src/main/java/com/kernelx/
+│   ├── config/          # Spring beans, CORS
+│   ├── controller/      # REST controllers
+│   ├── dsa/              # Manual custom data structures
+│   ├── dto/              # API and persistence records
+│   ├── exception/        # Central API error mapping
+│   ├── model/            # Simulation domain types
+│   ├── persistence/      # Atomic synchronized JSON repository
+│   └── service/          # Runtime, process, scheduler, memory, event, archive services
+└── src/test/java/com/kernelx/
+    ├── controller/       # Spring API integration tests
+    ├── dsa/              # Structure unit tests
+    ├── persistence/      # JSON storage tests
+    └── service/          # Engine and domain tests
+API.md
 README.md
 DEVELOPMENT.md
 ```
 
-## Run and test (Windows PowerShell)
+## Technology
 
-Required: JDK 21 and Maven 3.9+. The Codex shell currently inherits Java 8 and has no Maven command on `PATH`, though JDK 21 is installed. For the verified session build, Apache Maven 3.10.0 was downloaded under `%TEMP%\kernelx-build-tools\apache-maven-3.10.0` and its published SHA-512 checksum verified. In a new terminal where tools still do not resolve, set:
+- Java 21, Spring Boot 3.5.16, Maven
+- Jackson for JSON and local file persistence
+- Jakarta Bean Validation and JUnit 5
+- No database; no frontend yet
+
+## Run on Windows (PowerShell)
+
+Required: JDK 21 and Maven 3.9+. Application port defaults to **8081** and can be changed with `SERVER_PORT`. Storage defaults to `backend/data/` relative to the backend working directory; use `KERNELX_DATA_DIRECTORY` to choose another path.
+
+In this Codex shell, inherited PATH still selects Java 8 and does not contain Maven. For the verified build, JDK 21.0.13 was used with Apache Maven 3.10.0 downloaded to the Windows temp directory. Set these paths in PowerShell if needed:
 
 ```powershell
 $env:JAVA_HOME = 'C:\Program Files\Eclipse Adoptium\jdk-21.0.13.9-hotspot'
@@ -85,33 +77,52 @@ javac -version
 mvn -version
 ```
 
-Run all backend tests:
+Run the complete backend test suite:
 
 ```powershell
 cd C:\Users\atsid\OneDrive\Desktop\KernelX\backend
 mvn test
 ```
 
-Start the backend (currently exposes the Phase 1 health endpoint only; Phase 2 services are not yet mapped to REST):
+Start the API on port 8081:
 
 ```powershell
 cd C:\Users\atsid\OneDrive\Desktop\KernelX\backend
 mvn spring-boot:run
 ```
 
-Health check: `http://localhost:8080/api/health`.
-If port 8080 is occupied, use `mvn spring-boot:run "-Dspring-boot.run.arguments=--server.port=8081"` and open `http://localhost:8081/api/health`. Startup was verified on port 8081 because 8080 was already in use in this environment.
+Health check: `http://localhost:8081/api/health`.
 
-## Test result
+If 8081 is occupied, use another port:
 
-`mvn test` completed successfully on Java 21.0.13 / Maven 3.10.0: **24 tests, 0 failures, 0 errors, 0 skipped**. Coverage includes all Phase 1 DSA tests and the Spring endpoint, four scheduling modes, idle/arrival handling, tie-breaking, metrics/Gantt data, process transitions and events, memory strategies/fragmentation/deallocation, and simulation controls.
+```powershell
+$env:SERVER_PORT = '8082'
+mvn spring-boot:run
+```
 
-## Current limitations and next phases
+This environment had 8081 occupied during live verification; the app started on 8082 and `/api/health` returned `status: UP`. The API integration suite exercised the simulation endpoints using MockMvc and isolated temporary JSON data directories.
 
-- Simulation work is scheduled as a deterministic plan when `start` is called. Process/priority edits made after start do not rebuild the active plan.
-- The speed setting is timing metadata for a later polling UI; ticks advance only when explicitly requested.
-- Memory allocation is explicit through the engine; allocation failure does not automatically queue a process or retry later.
-- Process-manager operations are currently used from Java/service code and tests; Phase 2 does not expose simulation REST endpoints.
-- There is no simulation REST API, JSON persistence, or frontend yet.
+## Verification
 
-The next planned phase is Phase 3: JSON persistence and REST APIs. Stop here for review before proceeding.
+`mvn test` passed on Java 21.0.13 / Maven 3.10.0: **29 tests, 0 failures, 0 errors, 0 skipped**. Coverage includes all Phase 1 and 2 tests, JSON missing/corrupt/concurrent-write cases, API lifecycle and persistence, validation/status mapping, and CORS.
+
+## Runtime and persistence limits
+
+- One in-memory simulation session is supported per application instance. Session access is synchronized; do not point multiple application replicas at the same JSON directory.
+- Schedules are snapshots created at simulation start. Process edits made while the simulation is running or paused return `409`; reset before editing.
+- Speed is stored as a simulation setting. Ticks advance only when explicitly requested; no wall-clock scheduler is used.
+- JSON persistence is local-file storage, not a database or multi-host transaction system.
+- Saved configurations can be retrieved and then supplied to `/api/simulation/start`; there is no separate “apply configuration” endpoint.
+- React, persistence-backed event log management controls, and broader UI workflows are future work.
+
+## Phases
+
+1. Backend foundation and custom DSA — complete.
+2. Simulation engine — complete.
+3. JSON persistence and REST API — complete.
+4. Frontend foundation — not started.
+5. Dashboard and visualizations — not started.
+6. Integration and polishing — not started.
+7. Final documentation and demo workflow — not started.
+
+Stop here for review before Phase 4.
