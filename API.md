@@ -51,6 +51,17 @@ Returns `201` and the process PCB snapshot, including `remainingTime`, state, an
 
 List PCB snapshots in insertion order. Errors: `200` with an array.
 
+### `GET /api/processes/tree`
+
+Return the current process hierarchy as roots with nested `children` arrays. Each node includes `pid`, `name`, `state`, `priority`, `parentPid`, arrival/burst/remaining times, and requested memory. The response is `[]` for an empty process tree. It is a read-only snapshot of the existing first-child/next-sibling custom tree; traversal tracks node identity and omits any link that revisits a node, so malformed links cannot cause an infinite traversal. This endpoint does not change or replace the process data structure.
+
+```json
+[
+  {"pid":1001,"name":"compiler","state":"NEW","priority":5,"parentPid":-1,"arrivalTime":0,"burstTime":8,"remainingTime":8,"memoryRequirement":256,
+   "children":[{"pid":1002,"name":"worker","state":"NEW","priority":4,"parentPid":1001,"arrivalTime":1,"burstTime":3,"remainingTime":3,"memoryRequirement":64,"children":[]}]}
+]
+```
+
 ### `GET /api/processes/{pid}`
 
 Retrieve one process. Errors: `404` when absent.
@@ -127,6 +138,18 @@ Returns an array of `{pid, processName, startTime, endTime, duration, idle}`. In
 ### `GET /api/simulation/metrics`
 
 Returns per-process completion, turnaround, waiting, response times, plus their averages.
+
+## CPU heap trace APIs
+
+SJF and Priority scheduling record bounded, historical snapshots of operations on the actual Java `MaxHeap`. These are in-memory replay traces, not the live ready queue: the scheduler heap is temporary and is drained as work is dispatched. Traces are read-only and are not persisted in JSON. The recorder retains at most 8 runs and 4096 steps per run; `truncated` indicates the step limit was reached. FCFS and Round Robin use a queue and do not create heap traces.
+
+### `GET /api/dsa/heap/runs`
+
+List retained run summaries (newest last), with `runId`, algorithm, priority mode, process count, timestamps, step count, and truncation status.
+
+### `GET /api/dsa/heap/runs/{runId}`
+
+Retrieve one trace: metadata, indexed `finalHeap` snapshot, and ordered `steps`. Step kinds include `HEAPIFY`, `INSERT`, `EXTRACT_MAX`, `UPDATE`, `COMPARE`, and `SWAP`; comparison and swap steps include the real heap indices and process snapshots. The response is `404` if the run is absent or has aged out of the bounded history.
 
 ## Memory APIs
 

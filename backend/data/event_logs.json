@@ -1,1 +1,43 @@
-[]
+[ {
+  "eventId" : 1,
+  "simulationTime" : 0,
+  "pid" : null,
+  "type" : "SIMULATION_RESET",
+  "description" : "Simulation reset"
+}, {
+  "eventId" : 2,
+  "simulationTime" : 0,
+  "pid" : 1,
+  "type" : "PROCESS_CREATED",
+  "description" : "Process chrome created"
+}, {
+  "eventId" : 3,
+  "simulationTime" : 0,
+  "pid" : 2,
+  "type" : "PROCESS_CREATED",
+  "description" : "Process spotify created"
+}, {
+  "eventId" : 4,
+  "simulationTime" : 0,
+  "pid" : 3,
+  "type" : "PROCESS_CREATED",
+  "description" : "Process VSCode created"
+}, {
+  "eventId" : 5,
+  "simulationTime" : 0,
+  "pid" : 4,
+  "type" : "PROCESS_CREATED",
+  "description" : "Process Discord created"
+}, {
+  "eventId" : 6,
+  "simulationTime" : 0,
+  "pid" : 5,
+  "type" : "PROCESS_CREATED",
+  "description" : "Process Terminal created"
+}, {
+  "eventId" : 7,
+  "simulationTime" : 0,
+  "pid" : null,
+  "type" : "SIMULATION_STARTED",
+  "description" : "Started PRIORITY simulation for 5 processes"
+} ]

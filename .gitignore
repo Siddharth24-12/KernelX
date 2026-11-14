@@ -1,0 +1,15 @@
+# Java build output
+backend/target/
+*.class
+
+# Frontend dependencies and build output
+frontend/node_modules/
+frontend/dist/
+
+# Local environment configuration
+frontend/.env
+frontend/.env.*.local
+
+# Logs and TypeScript build metadata
+*.log
+*.tsbuildinfo

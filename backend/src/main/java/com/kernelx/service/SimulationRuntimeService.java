@@ -49,6 +49,10 @@ public class SimulationRuntimeService {
         return processes.listProcesses().stream().map(ProcessResponse::from).toList();
     }
 
+    public synchronized List<com.kernelx.dsa.ProcessTree.SnapshotNode> processTreeSnapshot() {
+        return processes.hierarchySnapshot();
+    }
+
     public synchronized ProcessResponse getProcess(int pid) { return ProcessResponse.from(requireProcess(pid)); }
 
     public synchronized void deleteProcess(int pid) {

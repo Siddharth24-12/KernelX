@@ -3,6 +3,9 @@ package com.kernelx.controller;
 import com.kernelx.dto.ChangePriorityRequest;
 import com.kernelx.dto.CreateProcessRequest;
 import com.kernelx.dto.ProcessResponse;
+import com.kernelx.dto.ProcessTreeNodeResponse;
+import com.kernelx.model.ProcessControlBlock;
+import com.kernelx.dsa.ProcessTree;
 import com.kernelx.service.SimulationRuntimeService;
 import jakarta.validation.Valid;
 import java.net.URI;
@@ -31,6 +34,19 @@ public class ProcessController {
 
     @GetMapping
     public List<ProcessResponse> list() { return runtime.listProcesses(); }
+
+    @GetMapping("/tree")
+    public List<ProcessTreeNodeResponse> tree() {
+        return runtime.processTreeSnapshot().stream().map(ProcessController::treeNode).toList();
+    }
+
+    private static ProcessTreeNodeResponse treeNode(ProcessTree.SnapshotNode node) {
+        ProcessControlBlock process = node.process();
+        return new ProcessTreeNodeResponse(process.getPid(), process.getName(), process.getState(),
+                process.getPriority(), process.getParentPid(), process.getArrivalTime(), process.getBurstTime(),
+                process.getRemainingTime(), process.getMemoryRequirement(), node.children().stream()
+                .map(ProcessController::treeNode).toList());
+    }
 
     @GetMapping("/{pid}")
     public ProcessResponse get(@PathVariable int pid) { return runtime.getProcess(pid); }

@@ -3,6 +3,8 @@ package com.kernelx.dsa;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.Comparator;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.NoSuchElementException;
 import org.junit.jupiter.api.Test;
 
@@ -33,5 +35,28 @@ class MaxHeapTest {
         assertFalse(heap.update(100, 0));
         heap.heapify(new Integer[0]);
         assertTrue(heap.isEmpty());
+    }
+
+    @Test void observerReportsActualHeapifyComparisonsSwapsExtractionAndUpdate() {
+        List<String> operations = new ArrayList<>();
+        MaxHeap<Integer> heap = new MaxHeap<Integer>(Comparator.naturalOrder(), new MaxHeap.Observer<Integer>() {
+            @Override public void onHeapify(List<Integer> values) { operations.add("heapify:" + values); }
+            @Override public void onInsert(Integer value, int index, int sizeBefore) { operations.add("insert:" + value + "@" + index); }
+            @Override public void onExtractMax(Integer maximum, Integer replacement, int sizeBefore) { operations.add("extract:" + maximum); }
+            @Override public void onUpdate(Integer previous, Integer replacement, int index) { operations.add("update:" + previous + "->" + replacement); }
+            @Override public void onCompare(int leftIndex, Integer left, int rightIndex, Integer right, int result, String phase) { operations.add("compare:" + phase); }
+            @Override public void onSwap(int leftIndex, Integer left, int rightIndex, Integer right) { operations.add("swap:" + leftIndex + ":" + rightIndex); }
+        });
+        heap.heapify(new Integer[]{2, 1});
+        heap.insert(5);
+        assertTrue(heap.update(1, 7));
+        assertEquals(7, heap.extractMax());
+        assertEquals(List.of(5, 2), heap.snapshot());
+        assertTrue(operations.contains("heapify:[2, 1]"));
+        assertTrue(operations.contains("insert:5@2"));
+        assertTrue(operations.stream().anyMatch(value -> value.startsWith("compare:")));
+        assertTrue(operations.stream().anyMatch(value -> value.startsWith("swap:")));
+        assertTrue(operations.contains("update:1->7"));
+        assertTrue(operations.contains("extract:7"));
     }
 }

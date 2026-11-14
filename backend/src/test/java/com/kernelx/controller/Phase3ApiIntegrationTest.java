@@ -35,6 +35,7 @@ class Phase3ApiIntegrationTest {
     }
 
     @Test void exercisesProcessSimulationMemoryEventsPersistenceValidationAndCors() throws Exception {
+        mvc.perform(get("/api/processes/tree")).andExpect(status().isOk()).andExpect(jsonPath("$", hasSize(0)));
         mvc.perform(options("/api/processes")
                         .header("Origin", ORIGIN)
                         .header("Access-Control-Request-Method", "GET"))
@@ -48,7 +49,7 @@ class Phase3ApiIntegrationTest {
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.state").value("NEW"));
         mvc.perform(post("/api/processes").contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"pid":102,"name":"indexer","priority":2,"arrivalTime":1,"burstTime":2,"memoryRequirement":16}
+                                {"pid":102,"name":"indexer","priority":2,"arrivalTime":1,"burstTime":2,"memoryRequirement":16,"parentPid":101}
                                 """))
                 .andExpect(status().isCreated());
         mvc.perform(post("/api/processes").contentType(MediaType.APPLICATION_JSON)
@@ -68,6 +69,11 @@ class Phase3ApiIntegrationTest {
                 .andExpect(status().isBadRequest());
 
         mvc.perform(get("/api/processes")).andExpect(status().isOk()).andExpect(jsonPath("$", hasSize(3)));
+        mvc.perform(get("/api/processes/tree")).andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].pid").value(101)).andExpect(jsonPath("$[0].name").value("compiler"))
+                .andExpect(jsonPath("$[0].state").value("NEW"))
+                .andExpect(jsonPath("$[0].children[0].pid").value(102))
+                .andExpect(jsonPath("$[0].children[0].parentPid").value(101));
         mvc.perform(get("/api/processes/101")).andExpect(status().isOk()).andExpect(jsonPath("$.name").value("compiler"));
         mvc.perform(get("/api/processes/999")).andExpect(status().isNotFound());
         mvc.perform(patch("/api/processes/102/priority").contentType(MediaType.APPLICATION_JSON)

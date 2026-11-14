@@ -2,6 +2,7 @@ package com.kernelx.service;
 
 import com.kernelx.dsa.CustomQueue;
 import com.kernelx.dsa.MaxHeap;
+import com.kernelx.dto.HeapEntrySnapshot;
 import com.kernelx.model.GanttSegment;
 import com.kernelx.model.ProcessMetrics;
 import com.kernelx.model.SchedulingAlgorithm;
@@ -21,6 +22,10 @@ public final class SchedulingService {
         private int firstStart = -1;
         private int completion = -1;
         private Work(SchedulingProcess process) { this.process = process; this.remaining = process.burstTime(); }
+        private HeapEntrySnapshot snapshot() {
+            return new HeapEntrySnapshot(process.pid(), process.name(), process.priority(),
+                    process.arrivalTime(), process.burstTime(), remaining);
+        }
     }
 
     private interface ReadySet {
@@ -28,6 +33,8 @@ public final class SchedulingService {
         Work poll();
         Work peek();
         boolean isEmpty();
+        default void simulationTime(int time) { }
+        default List<HeapEntrySnapshot> snapshot() { return List.of(); }
     }
 
     private static final class FifoReady implements ReadySet {
@@ -40,12 +47,30 @@ public final class SchedulingService {
 
     private static final class HeapReady implements ReadySet {
         private final MaxHeap<Work> heap;
-        private HeapReady(Comparator<Work> order) { heap = new MaxHeap<>(order); }
+        private final HeapTraceRecorder.RunSession trace;
+        private HeapReady(Comparator<Work> order, HeapTraceRecorder.RunSession trace) {
+            this.trace = trace;
+            heap = new MaxHeap<>(order, new MaxHeap.Observer<>() {
+                @Override public void onHeapify(List<Work> values) { trace.heapify(values.stream().map(Work::snapshot).toList()); }
+                @Override public void onInsert(Work value, int index, int sizeBefore) { trace.insert(value.snapshot(), index, sizeBefore); }
+                @Override public void onExtractMax(Work maximum, Work replacement, int sizeBefore) { trace.extract(maximum.snapshot(), replacement == null ? null : replacement.snapshot(), sizeBefore); }
+                @Override public void onUpdate(Work previous, Work replacement, int index) { trace.update(previous.snapshot(), replacement.snapshot(), index); }
+                @Override public void onCompare(int leftIndex, Work left, int rightIndex, Work right, int result, String phase) { trace.compare(leftIndex, left.snapshot(), rightIndex, right.snapshot(), result, phase); }
+                @Override public void onSwap(int leftIndex, Work left, int rightIndex, Work right) { trace.swap(leftIndex, left.snapshot(), rightIndex, right.snapshot()); }
+            });
+        }
         public void offer(Work work) { heap.insert(work); }
         public Work poll() { return heap.extractMax(); }
         public Work peek() { return heap.peekMax(); }
         public boolean isEmpty() { return heap.isEmpty(); }
+        @Override public void simulationTime(int time) { trace.setSimulationTime(time); }
+        @Override public List<HeapEntrySnapshot> snapshot() { return heap.snapshot().stream().map(Work::snapshot).toList(); }
     }
+
+    private final HeapTraceRecorder heapTraces;
+
+    public SchedulingService() { this(new HeapTraceRecorder()); }
+    public SchedulingService(HeapTraceRecorder heapTraces) { this.heapTraces = Objects.requireNonNull(heapTraces, "heapTraces"); }
 
     public SchedulingResult fcfs(List<SchedulingProcess> processes) {
         return run(processes, SchedulingAlgorithm.FCFS, 0, false);
@@ -86,12 +111,15 @@ public final class SchedulingService {
         Arrays.sort(arrivals, Comparator.comparingInt((Work w) -> w.process.arrivalTime())
                 .thenComparingInt(w -> w.process.pid()));
 
-        ReadySet ready = createReadySet(algorithm);
+        HeapTraceRecorder.RunSession heapTrace = algorithm == SchedulingAlgorithm.SJF || algorithm == SchedulingAlgorithm.PRIORITY
+                ? heapTraces.beginRun(algorithm, preemptive, arrivals.length) : null;
+        ReadySet ready = createReadySet(algorithm, heapTrace);
         List<GanttSegment> gantt = new ArrayList<>();
         int nextArrival = 0, completed = 0, time = 0, quantumUsed = 0;
         Work running = null;
 
         while (completed < arrivals.length) {
+            ready.simulationTime(time);
             while (nextArrival < arrivals.length && arrivals[nextArrival].process.arrivalTime() <= time) {
                 ready.offer(arrivals[nextArrival++]);
             }
@@ -137,6 +165,8 @@ public final class SchedulingService {
             }
         }
 
+        if (heapTrace != null) heapTrace.complete(ready.snapshot());
+
         List<ProcessMetrics> metrics = new ArrayList<>(arrivals.length);
         double waiting = 0, turnaround = 0, response = 0;
         for (Work work : arrivals) {
@@ -157,7 +187,7 @@ public final class SchedulingService {
                 time);
     }
 
-    private ReadySet createReadySet(SchedulingAlgorithm algorithm) {
+    private ReadySet createReadySet(SchedulingAlgorithm algorithm, HeapTraceRecorder.RunSession trace) {
         return switch (algorithm) {
             case FCFS, ROUND_ROBIN -> new FifoReady();
             case SJF -> new HeapReady((left, right) -> {
@@ -165,13 +195,13 @@ public final class SchedulingService {
                 if (comparison == 0) comparison = Integer.compare(right.process.arrivalTime(), left.process.arrivalTime());
                 if (comparison == 0) comparison = Integer.compare(right.process.pid(), left.process.pid());
                 return comparison;
-            });
+            }, trace);
             case PRIORITY -> new HeapReady((left, right) -> {
                 int comparison = Integer.compare(left.process.priority(), right.process.priority());
                 if (comparison == 0) comparison = Integer.compare(right.process.arrivalTime(), left.process.arrivalTime());
                 if (comparison == 0) comparison = Integer.compare(right.process.pid(), left.process.pid());
                 return comparison;
-            });
+            }, trace);
         };
     }
 

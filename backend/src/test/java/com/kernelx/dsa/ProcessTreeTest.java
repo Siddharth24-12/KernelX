@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.*;
 import com.kernelx.model.ProcessControlBlock;
 import java.util.ArrayList;
 import java.util.List;
+import java.lang.reflect.Field;
+import java.time.Duration;
 import org.junit.jupiter.api.Test;
 
 class ProcessTreeTest {
@@ -56,5 +58,23 @@ class ProcessTreeTest {
         assertTrue(tree.remove(1));
         assertEquals(1, tree.size());
         assertEquals(10, tree.find(10).getPid());
+    }
+
+    @Test void snapshotsHierarchyAndStopsOnMalformedCycles() throws Exception {
+        ProcessTree tree = new ProcessTree();
+        assertTrue(tree.snapshot().isEmpty());
+        tree.add(process(1, -1)); tree.add(process(2, 1));
+        Field rootField = ProcessTree.class.getDeclaredField("root"); rootField.setAccessible(true);
+        Object root = rootField.get(tree);
+        Field childField = root.getClass().getDeclaredField("firstChild"); childField.setAccessible(true);
+        Object child = childField.get(root);
+        childField.set(child, root); // malformed child cycle: root -> child -> root
+        assertTimeoutPreemptively(Duration.ofSeconds(1), () -> {
+            var snapshot = tree.snapshot();
+            assertEquals(1, snapshot.size());
+            assertEquals(1, snapshot.get(0).children().size());
+            assertEquals(2, snapshot.get(0).children().get(0).process().getPid());
+            assertTrue(snapshot.get(0).children().get(0).children().isEmpty());
+        });
     }
 }

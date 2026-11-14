@@ -111,6 +111,10 @@ public final class ProcessManager {
         return List.copyOf(result);
     }
 
+    public synchronized List<com.kernelx.dsa.ProcessTree.SnapshotNode> hierarchySnapshot() {
+        return hierarchy.snapshot();
+    }
+
     public synchronized List<SchedulingProcess> schedulingInputs() {
         List<SchedulingProcess> result = new ArrayList<>();
         processes.traverse(process -> {

@@ -2,6 +2,11 @@ package com.kernelx.dsa;
 
 import com.kernelx.model.ProcessControlBlock;
 import java.util.Objects;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.IdentityHashMap;
+import java.util.List;
+import java.util.Set;
 import java.util.function.Consumer;
 
 /** Process forest using first-child/next-sibling links; search is O(n). */
@@ -70,7 +75,28 @@ public final class ProcessTree {
 
     public void traversePreOrder(Consumer<ProcessControlBlock> visitor) {
         Objects.requireNonNull(visitor, "visitor");
-        for (Node top = root; top != null; top = top.nextSibling) traverse(top, visitor);
+        Set<Node> visited = Collections.newSetFromMap(new IdentityHashMap<>());
+        for (Node top = root; top != null && !visited.contains(top); top = top.nextSibling) traverse(top, visitor, visited);
+    }
+
+    /** Read-only hierarchy snapshot that stops if malformed links revisit a node. */
+    public List<SnapshotNode> snapshot() {
+        Set<Node> visited = Collections.newSetFromMap(new IdentityHashMap<>());
+        List<SnapshotNode> result = new ArrayList<>();
+        for (Node top = root; top != null && visited.add(top); top = top.nextSibling) result.add(snapshot(top, visited));
+        return List.copyOf(result);
+    }
+
+    public record SnapshotNode(ProcessControlBlock process, List<SnapshotNode> children) {
+        public SnapshotNode { children = List.copyOf(children); }
+    }
+
+    private SnapshotNode snapshot(Node node, Set<Node> visited) {
+        List<SnapshotNode> children = new ArrayList<>();
+        for (Node child = node.firstChild; child != null && visited.add(child); child = child.nextSibling) {
+            children.add(snapshot(child, visited));
+        }
+        return new SnapshotNode(node.process, children);
     }
 
     public String displayHierarchy() {
@@ -124,10 +150,10 @@ public final class ProcessTree {
         return null;
     }
 
-    private void traverse(Node node, Consumer<ProcessControlBlock> visitor) {
-        if (node == null) return;
+    private void traverse(Node node, Consumer<ProcessControlBlock> visitor, Set<Node> visited) {
+        if (node == null || !visited.add(node)) return;
         visitor.accept(node.process);
-        for (Node child = node.firstChild; child != null; child = child.nextSibling) traverse(child, visitor);
+        for (Node child = node.firstChild; child != null && !visited.contains(child); child = child.nextSibling) traverse(child, visitor, visited);
     }
 
     private void appendHierarchy(Node node, int depth, StringBuilder result) {

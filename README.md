@@ -2,7 +2,7 @@
 
 KernelX is a DSA-centered operating system scheduling simulator. The backend now includes custom data structures, a deterministic simulation engine, JSON persistence, and REST APIs. It deliberately simulates CPU and memory; it does not report measurements from the host computer.
 
-> **Status:** Phases 1–3 complete. React/frontend work has not started.
+> **Status:** Phases 1–3 complete. Phase 4 frontend is implemented: Overview, Processes, CPU Scheduler, Memory Manager, Process Tree, Event Monitor, Simulation Archive and Settings.
 
 ## Features
 
@@ -12,10 +12,11 @@ KernelX is a DSA-centered operating system scheduling simulator. The backend now
 - First Fit, Best Fit, and Worst Fit contiguous simulated memory with fragmentation reporting and free-block coalescing.
 - Typed event history persisted as JSON.
 - Save/list/retrieve/delete completed simulation records and named scheduler configurations.
+- Interactive process hierarchy from the backend’s custom process tree; searchable chronological event monitor; JSON-backed archive/configuration management; browser-local scheduler defaults and API health settings.
 - JSON writes use temporary files and atomic replacement when supported. Corrupt files are quarantined for recovery.
 - REST errors share a safe JSON response; CORS is configured for `http://localhost:5173`.
 
-See [API.md](API.md) for the complete request/response reference and examples.
+See [API.md](API.md) for the backend request/response reference and [FRONTEND_API_MAPPING.md](FRONTEND_API_MAPPING.md) for frontend coverage and capability limits.
 
 ## DSA implementation
 
@@ -31,6 +32,13 @@ The new persistence layer stores DTO snapshots and never serializes the live cus
 ## Project layout
 
 ```text
+frontend/
+├── src/api/              # Shared typed Axios client and endpoint modules
+├── src/components/       # Workstation controls, states and panels
+├── src/hooks/            # Controlled backend polling
+├── src/layouts/          # Persistent sidebar/topbar shell
+├── src/pages/            # Overview, Processes, Scheduler, Memory
+└── src/styles.css        # Graphite/cloud/yellow design system
 backend/
 ├── data/
 │   ├── simulations.json
@@ -53,6 +61,7 @@ backend/
 API.md
 README.md
 DEVELOPMENT.md
+FRONTEND_API_MAPPING.md
 ```
 
 ## Technology
@@ -60,11 +69,11 @@ DEVELOPMENT.md
 - Java 21, Spring Boot 3.5.16, Maven
 - Jackson for JSON and local file persistence
 - Jakarta Bean Validation and JUnit 5
-- No database; no frontend yet
+- React 18, TypeScript, Vite, Tailwind CSS, React Router, Axios, Recharts, Lucide React, Three.js, React Three Fiber and Drei
 
 ## Run on Windows (PowerShell)
 
-Required: JDK 21 and Maven 3.9+. Application port defaults to **8081** and can be changed with `SERVER_PORT`. Storage defaults to `backend/data/` relative to the backend working directory; use `KERNELX_DATA_DIRECTORY` to choose another path.
+Required: JDK 21 and Maven 3.9+ for the backend; Node.js 20.19+ and npm for the frontend. Application port defaults to **8081** and can be changed with `SERVER_PORT`. Storage defaults to `backend/data/` relative to the backend working directory; use `KERNELX_DATA_DIRECTORY` to choose another path.
 
 In this Codex shell, inherited PATH still selects Java 8 and does not contain Maven. For the verified build, JDK 21.0.13 was used with Apache Maven 3.10.0 downloaded to the Windows temp directory. Set these paths in PowerShell if needed:
 
@@ -100,11 +109,13 @@ $env:SERVER_PORT = '8082'
 mvn spring-boot:run
 ```
 
-This environment had 8081 occupied during live verification; the app started on 8082 and `/api/health` returned `status: UP`. The API integration suite exercised the simulation endpoints using MockMvc and isolated temporary JSON data directories.
+The API integration suite exercises process-tree, simulation, events and archive endpoints using MockMvc and isolated temporary JSON data directories.
 
 ## Verification
 
-`mvn test` passed on Java 21.0.13 / Maven 3.10.0: **29 tests, 0 failures, 0 errors, 0 skipped**. Coverage includes all Phase 1 and 2 tests, JSON missing/corrupt/concurrent-write cases, API lifecycle and persistence, validation/status mapping, and CORS.
+`mvn test` passed on Java 21.0.13 / Maven 3.10.0: **34 tests, 0 failures, 0 errors, 0 skipped**. This includes empty and nested process-tree API responses, cycle-safe custom-tree traversal, API lifecycle/archive persistence on temporary JSON storage, validation, CORS, and actual scheduler heap trace integration.
+
+Frontend tests: **20 passed**; `npm run typecheck` and `npm run build` pass. The build reports a large CPU Internals bundle warning from Three.js. Coverage includes process tree selection/expand/empty/error states, event filtering/order, archive list/save/load/delete, settings persistence/health, scheduler defaults and application navigation.
 
 ## Runtime and persistence limits
 
@@ -113,16 +124,37 @@ This environment had 8081 occupied during live verification; the app started on 
 - Speed is stored as a simulation setting. Ticks advance only when explicitly requested; no wall-clock scheduler is used.
 - JSON persistence is local-file storage, not a database or multi-host transaction system.
 - Saved configurations can be retrieved and then supplied to `/api/simulation/start`; there is no separate “apply configuration” endpoint.
-- React, persistence-backed event log management controls, and broader UI workflows are future work.
+- A saved simulation is a read-only snapshot; the backend does not provide a resume/restore route. Saved configurations can be loaded into the scheduler UI, which submits supported fields through the existing simulation start endpoint.
 
 ## Phases
 
 1. Backend foundation and custom DSA — complete.
 2. Simulation engine — complete.
 3. JSON persistence and REST API — complete.
-4. Frontend foundation — not started.
-5. Dashboard and visualizations — not started.
+4. Frontend foundation, core pages and remaining frontend functionality — complete.
+5. CPU internals visualization — Stage 5A and Stage 5B complete; Stage 5C and later not started.
 6. Integration and polishing — not started.
 7. Final documentation and demo workflow — not started.
 
-Stop here for review before Phase 4.
+Phase 4 is complete. Phase 5B is implemented: the processor die renders the actual backend Java MaxHeap operation trace for SJF and Priority scheduling. Replay is historical and read-only. Phase 5C and later are not started. See [PHASE5A_DESIGN.md](PHASE5A_DESIGN.md).
+
+## Frontend (Phase 4)
+
+All eight pages are Overview, Processes, CPU Scheduler, Memory Manager, Process Tree, Event Monitor, Simulation Archive and Settings. Deep Graphite `#20221F` dominates the canvas and panels; Soft Cloud White `#F3F2EC` supports readable text and select controls; Sunshine Yellow `#F5D547` marks primary actions, active simulation cues and allocations. Scheduler and memory visualizations render actual backend data. See [FRONTEND_API_MAPPING.md](FRONTEND_API_MAPPING.md) for each integration and capability limit.
+
+Install and run from Windows PowerShell:
+
+```powershell
+cd C:\Users\atsid\OneDrive\Desktop\KernelX\frontend
+npm install
+Copy-Item .env.example .env
+npm run dev
+```
+
+Open `http://localhost:5173`. To use a backend on 8082, set `VITE_API_BASE_URL=http://localhost:8082` in `frontend/.env` before starting Vite. In another terminal start the backend using the PowerShell setup commands above. Frontend checks:
+
+```powershell
+npm run typecheck
+npm test
+npm run build
+```

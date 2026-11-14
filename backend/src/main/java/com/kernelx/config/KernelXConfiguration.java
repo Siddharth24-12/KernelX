@@ -3,6 +3,7 @@ package com.kernelx.config;
 import com.kernelx.model.SystemEvent;
 import com.kernelx.service.EventLogPersistenceService;
 import com.kernelx.service.EventManager;
+import com.kernelx.service.HeapTraceRecorder;
 import com.kernelx.service.ProcessManager;
 import com.kernelx.service.SchedulingService;
 import java.util.List;
@@ -22,5 +23,8 @@ public class KernelXConfiguration {
     ProcessManager processManager(EventManager events) { return new ProcessManager(events); }
 
     @Bean
-    SchedulingService schedulingService() { return new SchedulingService(); }
+    HeapTraceRecorder heapTraceRecorder() { return new HeapTraceRecorder(); }
+
+    @Bean
+    SchedulingService schedulingService(HeapTraceRecorder traces) { return new SchedulingService(traces); }
 }
