@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
-import { Activity, Boxes, ChevronLeft, CircleHelp, Cpu, Database, LayoutDashboard, Menu, Network, ScrollText, Settings2, Workflow, ListPlus, GitCompareArrows, ChartNoAxesCombined } from 'lucide-react'
+import { Activity, Boxes, ChevronLeft, CircleHelp, Cpu, Database, LayoutDashboard, Menu, Network, ScrollText, Settings2, Workflow, ListPlus, GitCompareArrows, ChartNoAxesCombined, FlaskConical } from 'lucide-react'
 import { useSystemData } from '../hooks/useSystemData'
 
 const primary = [
@@ -13,13 +13,14 @@ const later = [
   { to: '/tree', label: 'Process Tree', icon: Network },
   { to: '/workloads', label: 'Workload Studio', icon: ListPlus },
   { to: '/comparison', label: 'Algorithm Comparison', icon: GitCompareArrows },
+  { to: '/experiments', label: 'Experimentation Lab', icon: FlaskConical },
   { to: '/analytics', label: 'System Analytics', icon: ChartNoAxesCombined },
   { to: '/events', label: 'Event Monitor', icon: ScrollText },
   { to: '/archive', label: 'Simulation Archive', icon: Boxes },
   { to: '/settings', label: 'Settings', icon: Settings2 },
   { to: '/internals', label: 'CPU Internals', icon: Cpu },
 ]
-const titles: Record<string, string> = { '/': 'System overview', '/processes': 'Process manager', '/workloads': 'Workload studio', '/comparison': 'Algorithm comparison', '/analytics': 'System analytics', '/scheduler': 'CPU scheduler', '/memory': 'Memory manager', '/tree': 'Process tree', '/events': 'Event monitor', '/archive': 'Simulation archive', '/settings': 'Settings', '/internals': 'CPU internals' }
+const titles: Record<string, string> = { '/': 'System overview', '/processes': 'Process manager', '/workloads': 'Workload studio', '/comparison': 'Algorithm comparison', '/experiments': 'Experimentation lab', '/analytics': 'System analytics', '/scheduler': 'CPU scheduler', '/memory': 'Memory manager', '/tree': 'Process tree', '/events': 'Event monitor', '/archive': 'Simulation archive', '/settings': 'Settings', '/internals': 'CPU internals' }
 
 export function AppShell() {
   const data = useSystemData()

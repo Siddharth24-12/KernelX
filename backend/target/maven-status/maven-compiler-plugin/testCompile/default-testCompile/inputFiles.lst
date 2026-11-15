@@ -1,6 +1,7 @@
 C:\Users\atsid\OneDrive\Desktop\KernelX\backend\src\test\java\com\kernelx\controller\AluApiIntegrationTest.java
 C:\Users\atsid\OneDrive\Desktop\KernelX\backend\src\test\java\com\kernelx\controller\AnalyticsApiIntegrationTest.java
 C:\Users\atsid\OneDrive\Desktop\KernelX\backend\src\test\java\com\kernelx\controller\ComparisonApiIntegrationTest.java
+C:\Users\atsid\OneDrive\Desktop\KernelX\backend\src\test\java\com\kernelx\controller\ExperimentApiIntegrationTest.java
 C:\Users\atsid\OneDrive\Desktop\KernelX\backend\src\test\java\com\kernelx\controller\FpbApiIntegrationTest.java
 C:\Users\atsid\OneDrive\Desktop\KernelX\backend\src\test\java\com\kernelx\controller\HeapTraceApiIntegrationTest.java
 C:\Users\atsid\OneDrive\Desktop\KernelX\backend\src\test\java\com\kernelx\controller\Phase3ApiIntegrationTest.java
@@ -17,6 +18,7 @@ C:\Users\atsid\OneDrive\Desktop\KernelX\backend\src\test\java\com\kernelx\persis
 C:\Users\atsid\OneDrive\Desktop\KernelX\backend\src\test\java\com\kernelx\service\AluTraceRecorderTest.java
 C:\Users\atsid\OneDrive\Desktop\KernelX\backend\src\test\java\com\kernelx\service\AnalyticsServiceTest.java
 C:\Users\atsid\OneDrive\Desktop\KernelX\backend\src\test\java\com\kernelx\service\ComparisonFailureIsolationTest.java
+C:\Users\atsid\OneDrive\Desktop\KernelX\backend\src\test\java\com\kernelx\service\ExperimentServiceTest.java
 C:\Users\atsid\OneDrive\Desktop\KernelX\backend\src\test\java\com\kernelx\service\FpbTraceRecorderTest.java
 C:\Users\atsid\OneDrive\Desktop\KernelX\backend\src\test\java\com\kernelx\service\HeapTraceRecorderTest.java
 C:\Users\atsid\OneDrive\Desktop\KernelX\backend\src\test\java\com\kernelx\service\MemoryManagerTest.java

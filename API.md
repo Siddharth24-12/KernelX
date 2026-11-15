@@ -351,3 +351,66 @@ Retrieve one saved report. Returns `200`; unknown IDs return `404`.
 Delete a saved report. Returns `204`; unknown IDs return `404`.
 
 Comparison reads do not invoke scheduling. JSON persistence follows the existing atomic repository convention and uses the configured `kernelx.data-directory` (`KERNELX_DATA_DIRECTORY` when launched through the documented application properties).
+
+## Interactive OS Experiments (Phase 6D)
+
+Experiments use a saved workload ID, including a built-in template, and copy its full definition into the report. They never load or modify the active runtime or saved workload. Completed reports are stored separately in `experiments.json`, using the same atomic JSON repository. The service appends a report only after the baseline and every requested variant complete.
+
+### `POST /api/experiments`
+
+Executes one scheduling or memory experiment and returns `201` with a persisted `ExperimentReport`. The experiment name is required (up to 100 characters); variants require unique IDs and labels. Scheduling and memory requests have separate fields and reject unsupported combinations.
+
+Scheduling request example:
+
+```json
+{
+  "name": "Priority and burst study",
+  "description": "Compare changes against the saved workload baseline",
+  "baseWorkloadId": "saved-or-template-workload-id",
+  "type": "SCHEDULING",
+  "variants": [
+    {"variantId":"rr-q2","label":"Round Robin q2","algorithm":"ROUND_ROBIN","timeQuantum":2,"processChanges":[{"pid":62001,"burstTime":6}]},
+    {"variantId":"priority-p","label":"Preemptive Priority","algorithm":"PRIORITY","preemptivePriority":true,"processChanges":[{"pid":62002,"arrivalTime":3,"priority":9}]}
+  ]
+}
+```
+
+The baseline takes its algorithm, quantum and preemption mode from the immutable workload snapshot. Each variant may override algorithm, Round Robin quantum, Priority preemption, and per-process `arrivalTime`, `burstTime`, or `priority`; omitted fields retain the snapshot value. PID, name, memory request and parent relationship stay fixed. One to 12 variants are accepted; a variant must differ from the baseline and sibling variants must be unique. Round Robin quantum is 1–100000 and preemption is supported only for Priority. Results reuse the existing scheduler and include actual Gantt segments, averages, CPU utilization, throughput, per-process metrics and baseline deltas.
+
+Memory request example:
+
+```json
+{
+  "name": "Allocator sequence",
+  "description": "Same operations under each fit policy",
+  "baseWorkloadId": "saved-or-template-workload-id",
+  "type": "MEMORY",
+  "variants": [
+    {"variantId":"best","label":"Best Fit","memoryStrategy":"BEST_FIT"},
+    {"variantId":"worst","label":"Worst Fit","memoryStrategy":"WORST_FIT"}
+  ],
+  "memoryOperations": [
+    {"operation":"ALLOCATE","pid":1,"amount":64},
+    {"operation":"DEALLOCATE","pid":1},
+    {"operation":"ALLOCATE","pid":2,"amount":32}
+  ]
+}
+```
+
+The workload's `totalMemory` is the shared arena size. First Fit is the baseline; both Best Fit and Worst Fit are required variants. Between 1 and 512 ordered operations are replayed unchanged in a new `MemoryManager` per policy. Allocation requests require a positive PID and amount no larger than the arena. A PID must be deallocated before another allocation request for that PID; a deallocation must follow an earlier allocation request. An allocation may fail due to contiguous-space limits; that failure is measured and subsequent free of that PID is a no-op for that policy. Results contain each operation outcome and final address-ordered block layout.
+
+Scheduling metrics use the Phase 6B definitions: utilization is non-idle Gantt duration / elapsed schedule time × 100; throughput is process count / elapsed time. Memory external fragmentation is `100 × (1 − largestFreeBlock / freeMemory)` when free memory is positive, otherwise zero. The report includes baseline values, signed difference (`variant − baseline`), absolute difference, and percentage change (`difference / abs(baseline) × 100`) when the baseline is nonzero. Winners are listed per metric, include ties, and are not a universal ranking. Memory allocated capacity and successful allocations/free capacity/largest block maximize; failed allocations and fragmentation minimize.
+
+Invalid experiment input returns `400`. Runtime failures return `500` and do not persist a partial report. Experiment scheduler and memory event contexts are isolated; they do not alter the simulation, JSON event history, original workload or diagnostic DSA traces.
+
+### `GET /api/experiments`
+
+List completed reports (`200`, `ExperimentReport[]`).
+
+### `GET /api/experiments/{id}`
+
+Retrieve one completed report (`200`); unknown IDs return `404`.
+
+### `DELETE /api/experiments/{id}`
+
+Delete a saved report (`204`); unknown IDs return `404`.

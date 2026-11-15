@@ -2,7 +2,7 @@
 
 KernelX is a DSA-centered operating system scheduling simulator. The backend now includes custom data structures, a deterministic simulation engine, JSON persistence, and REST APIs. It deliberately simulates CPU and memory; it does not report measurements from the host computer.
 
-> **Status:** Phases 1–4, CPU Internals Phases 5A–5F, and Phases 6A–6C are implemented. Phase 6D has not started.
+> **Status:** Phases 1–4, CPU Internals Phases 5A–5F, and Phases 6A–6D are implemented. Phase 6E has not started.
 
 ## Features
 
@@ -15,6 +15,7 @@ KernelX is a DSA-centered operating system scheduling simulator. The backend now
 - Workload Studio with six deterministic templates, editable process definitions, validation, JSON-backed CRUD, and execution through the existing scheduler.
 - Algorithm Comparison runs one immutable workload through independent backend scheduler instances, compares actual metrics and Gantt output, and saves completed reports as JSON.
 - System Analytics separates actual per-tick CPU history and live memory/process state from persisted events and historical scheduling comparison reports.
+- Experimentation Lab runs immutable saved workload variants through isolated scheduler instances, and replays a single ordered allocation/free sequence against First, Best and Worst Fit memory arenas.
 - Interactive process hierarchy from the backend’s custom process tree; searchable chronological event monitor; JSON-backed archive/configuration management; browser-local scheduler defaults and API health settings.
 - JSON writes use temporary files and atomic replacement when supported. Corrupt files are quarantined for recovery.
 - REST errors share a safe JSON response; CORS is configured for `http://localhost:5173`.
@@ -90,6 +91,14 @@ Start the backend with `mvn spring-boot:run` from `backend/` and the frontend wi
 Open **System Analytics** from navigation or `/analytics`. The CPU view polls actual runtime snapshots and tick samples; a sample is recorded only after each real simulated tick. Executed Gantt intervals are grouped from those tick samples, while the full scheduler plan is shown separately. Memory figures use the live allocator blocks; external fragmentation is `100 × (1 − largest free block / total free memory)`, or 0% when memory is fully allocated. Allocation failures are recorded as structured events.
 
 Lifecycle and event views use persisted event IDs, process IDs, types, descriptions and simulation-time values. Events do not contain wall-clock timestamps or run IDs, so matching simulation ticks from separate resets are combined in frequency charts. Historical performance filters saved Phase 6B comparison reports and remains separate from current simulator measurements. CPU telemetry is bounded in memory to 4,096 samples and clears on backend restart; event logs and comparisons use their existing JSON persistence.
+
+## Experimentation Lab (Phase 6D)
+
+Open **Experimentation Lab** from navigation or `/experiments`. Scheduling experiments use a saved workload snapshot as the baseline; each variant can change algorithm, Round Robin quantum, Priority preemption, and per-process arrival, burst and priority values. Variants run through fresh instances of the existing `SchedulingService`; metrics, process rows and Gantt segments are returned from those actual scheduler results. The active simulator and saved workload are not mutated.
+
+Memory experiments use the workload's configured total memory and require the same ordered ALLOCATE/DEALLOCATE sequence to be replayed in isolated First Fit, Best Fit and Worst Fit arenas. Allocation failures are recorded independently for each strategy. External fragmentation is `100 × (1 − largest free block / total free memory)`, or zero when total free memory is zero. A free for a PID whose allocation failed under a strategy is reported as a no-op for that strategy.
+
+Completed reports are persisted separately in `experiments.json`; the API writes only after every baseline and variant completes. Reports contain the workload snapshot, baseline and variant configurations, actual results, signed and absolute metric differences, percent changes where a nonzero baseline allows them, per-process scheduling deltas and tied best values. Scheduling reports compare average wait/turnaround/response, utilization and throughput; memory reports compare allocation outcomes, free/allocated capacity and fragmentation. Metric leaders are per metric and do not imply one universally best policy. See [API.md](API.md) for request limits and endpoint schemas.
 
 ## Run on Windows (PowerShell)
 
