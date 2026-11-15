@@ -29,4 +29,35 @@ describe('PMU replay projection', () => {
     expect(trace.beforeSnapshot.nodes[0].nextNodeId).toBeNull()
     expect(trace.afterSnapshot.nodes[0].nextNodeId).toBe(2)
   })
+
+  it('replays a middle-node deletion from recorded pointer changes without mutating trace snapshots', () => {
+    const third = { ...first, nodeId: 3, pid: 13, name: 'worker-2' }
+    const beforeSnapshot: PmuListSnapshot = {
+      ...empty, headNodeId: 1, tailNodeId: 3, size: 3,
+      nodes: [{ ...first, nextNodeId: 2 }, { ...second, nextNodeId: 3 }, third],
+    }
+    const afterSnapshot: PmuListSnapshot = {
+      ...empty, headNodeId: 1, tailNodeId: 3, size: 2,
+      nodes: [{ ...first, nextNodeId: 3 }, third],
+    }
+    const deletion: PmuTrace = {
+      ...trace, traceId: 'DELETE-MIDDLE', operation: 'DELETE', targetPid: 12, stepCount: 4,
+      beforeSnapshot, afterSnapshot,
+      steps: [
+        { sequence: 1, kind: 'NODE_VISIT', pid: 11, nodeId: 1, position: 0, ownerNodeId: null, oldNextNodeId: null, newNextNodeId: null, oldHeadNodeId: null, newHeadNodeId: null, oldTailNodeId: null, newTailNodeId: null, result: null, node: first, description: 'visited head' },
+        { sequence: 2, kind: 'SEARCH_COMPARE', pid: 12, nodeId: 2, position: 1, ownerNodeId: null, oldNextNodeId: null, newNextNodeId: null, oldHeadNodeId: null, newHeadNodeId: null, oldTailNodeId: null, newTailNodeId: null, result: true, node: second, description: 'matched target' },
+        { sequence: 3, kind: 'POINTER_UPDATE', pid: null, nodeId: 1, position: 0, ownerNodeId: 1, oldNextNodeId: 2, newNextNodeId: 3, oldHeadNodeId: null, newHeadNodeId: null, oldTailNodeId: null, newTailNodeId: null, result: null, node: null, description: 'bypass removed node' },
+        { sequence: 4, kind: 'DELETE', pid: 12, nodeId: 2, position: 1, ownerNodeId: null, oldNextNodeId: null, newNextNodeId: null, oldHeadNodeId: null, newHeadNodeId: null, oldTailNodeId: null, newTailNodeId: null, result: true, node: second, description: 'removed target' },
+      ],
+    }
+    const original = structuredClone(deletion)
+
+    expect(projectPmuTrace(deletion, 1).snapshot.nodes.map((node) => node.pid)).toEqual([11, 12, 13])
+    const removed = projectPmuTrace(deletion, 2).snapshot
+    expect(removed.nodes.map((node) => node.pid)).toEqual([11, 13])
+    expect(removed.nodes[0].nextNodeId).toBe(3)
+    expect(removed.size).toBe(2)
+    expect(projectPmuTrace(deletion, 3).snapshot).toEqual(afterSnapshot)
+    expect(deletion).toEqual(original)
+  })
 })

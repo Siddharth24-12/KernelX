@@ -2,6 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { CpuInternalsPage } from './CpuInternalsPage'
+import { pmuApi } from '../api/pmu'
+import { aluApi } from '../api/alu'
+import { fpbApi } from '../api/fpb'
+import { ptuApi } from '../api/ptu'
 import { heapOperationLabel, projectRecordedHeap } from './cpuInternalsReplay'
 import { layoutHeapSlots } from '../components/internals/ProcessorDieScene'
 import { WebglFallback } from '../components/internals/WebglFallback'
@@ -47,10 +51,22 @@ const trace: HeapRunTrace = {
 }
 const laterTrace: HeapRunTrace = { ...trace, runId: 'run-sjf-43', algorithm: 'SJF' }
 
-beforeEach(() => { vi.clearAllMocks(); mocks.runs.mockResolvedValue([
+beforeEach(() => {
+  vi.clearAllMocks()
+  vi.mocked(pmuApi.snapshot).mockResolvedValue({ listId: 'list-1', headNodeId: null, tailNodeId: null, size: 0, nodes: [], truncated: false })
+  vi.mocked(pmuApi.traces).mockResolvedValue([])
+  vi.mocked(aluApi.snapshot).mockResolvedValue({ tableId: 'table-1', capacity: 16, size: 0, loadFactor: 0, buckets: [], truncated: false })
+  vi.mocked(aluApi.traces).mockResolvedValue([])
+  vi.mocked(fpbApi.snapshot).mockResolvedValue({ active: false, queue: null, message: 'No active scheduler queue' })
+  vi.mocked(fpbApi.traces).mockResolvedValue([])
+  vi.mocked(ptuApi.snapshot).mockResolvedValue({ size: 0, rootCount: 0, rootPids: [], nodes: [], truncated: false })
+  vi.mocked(ptuApi.traces).mockResolvedValue([])
+  mocks.runs.mockResolvedValue([
   { runId: laterTrace.runId, algorithm: laterTrace.algorithm, preemptive: false, processCount: 2, startedAt: laterTrace.startedAt, completedAt: laterTrace.completedAt, operationCount: laterTrace.steps.length, truncated: false },
   { runId: trace.runId, algorithm: trace.algorithm, preemptive: false, processCount: 2, startedAt: trace.startedAt, completedAt: trace.completedAt, operationCount: trace.steps.length, truncated: false },
-]); mocks.run.mockImplementation(async (id: string) => id === trace.runId ? trace : laterTrace) })
+  ])
+  mocks.run.mockImplementation(async (id: string) => id === trace.runId ? trace : laterTrace)
+})
 
 describe('CPU Internals Stage 5B', () => {
   it('projects only recorded array insertions, replacements and swaps', () => {

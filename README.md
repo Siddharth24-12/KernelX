@@ -2,7 +2,7 @@
 
 KernelX is a DSA-centered operating system scheduling simulator. The backend now includes custom data structures, a deterministic simulation engine, JSON persistence, and REST APIs. It deliberately simulates CPU and memory; it does not report measurements from the host computer.
 
-> **Status:** Phases 1–4, CPU Internals Phases 5A–5F, and Phases 6A–6E are implemented. Phase 6E completes integration and reliability refinement; browser-level demo verification remains a manual step.
+> **Status:** Phases 1–4, CPU Internals Phases 5A–5F, and Phases 6A–6E are implemented. Phase 7C stability review is partially verified; remaining browser checks and readiness findings are recorded in [PHASE7C_REPORT.md](PHASE7C_REPORT.md).
 
 ## Features
 
@@ -147,7 +147,7 @@ Phase 6E adds cross-feature API workflow coverage across workload loading, runti
 
 Phase 6E verification: `mvn test` — **66 passed, 0 failed, 0 errors, 0 skipped**; `npm test` — **55 passed across 13 files**; `npm run typecheck` and `npm run build` passed. The production build warns that the deferred Three.js scene chunk is over 500 KB. Browser-level verification was not performed; automated tests do not cover WebGL rendering. See [DEVELOPMENT.md](DEVELOPMENT.md) for detailed test coverage and limitations.
 
-Frontend tests: **39 passed**; `npm run typecheck` and `npm run build` pass. The build reports the existing large CPU Internals bundle warning from Three.js. Coverage includes Workload Studio editing, validation/load/run flow, empty/error states and navigation alongside FPB, ALU, PTU, process tree, event filtering, archive, settings and scheduler behavior.
+Phase 6A frontend baseline: **39 tests passed** at that phase. Current Phase 7C stability results, including three repeated full frontend runs, are recorded in [PHASE7C_REPORT.md](PHASE7C_REPORT.md). The production build still reports the large deferred CPU Internals Three.js chunk advisory.
 
 ## Runtime and persistence limits
 

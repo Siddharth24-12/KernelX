@@ -1,6 +1,8 @@
 # KernelX Development Guide
 
-## Current checkpoint: Phase 6E
+## Current checkpoint: Phase 7C stability review
+
+The final stability review added frontend test-environment cleanup and direct PMU deletion replay projection coverage. Three consecutive frontend suite runs and the backend suite pass. Phase 7C remains partially verified because populated browser replay state immutability and selected browser diagnostics were not rerun in this phase. See [PHASE7C_REPORT.md](PHASE7C_REPORT.md) for exact results and limitations.
 
 **Phase 5F — Process Tree Visualization Unit.** The PTU observes actual operations inside the existing Java `ProcessTree` first-child/next-sibling forest. Its flat link snapshot and bounded operation traces are read-only on retrieval; 32 traces × 2,048 steps are held in memory and cleared on restart. UI replay highlights real pointer changes over each trace's final tree; intermediate full-tree snapshots are not recorded. See [PHASE5F_DESIGN.md](PHASE5F_DESIGN.md) and the prior 5A/5D/5E design notes.
 
@@ -149,13 +151,23 @@ npm run dev
 
 Vite serves `http://localhost:5173`. If the API uses port 8082, change `VITE_API_BASE_URL` to `http://localhost:8082` in `frontend/.env` before starting Vite. Run frontend verification from `frontend/`:
 
+### Backend CORS
+
+The backend's single global MVC CORS mapping accepts development requests from `http://localhost` and `http://127.0.0.1` on any port, including alternate Vite ports. These patterns are limited to those two loopback hostnames; unrelated origins are rejected. Credentials are not enabled. For a deployed frontend, set `KERNELX_CORS_ALLOWED_ORIGINS` to a comma-separated list of exact trusted origins (including scheme and optional port), for example:
+
+```powershell
+$env:KERNELX_CORS_ALLOWED_ORIGINS = 'https://kernelx.example.com,https://admin.kernelx.example.com'
+```
+
+Configured production origins are added alongside the local development origins. Do not use `*`; configure only the exact frontend origins that should call the API.
+
 ```powershell
 npm run typecheck
 npm test
 npm run build
 ```
 
-Verified with Node 24.15.0 / npm 11.12.1, Vite 8.3.8, Vitest 5.1.0 and React Router 7.18.5. TypeScript check and production build pass; the Phase 6A full frontend suite has **39 tests passing**. Coverage includes Workload Studio editing, validation/load/run flow, empty/error states and route navigation alongside FPB, ALU, PMU/PDU, tree, events, archive and settings.
+Verified with Node 24.15.0 / npm 11.12.1, Vite 8.3.8, Vitest 5.1.0 and React Router 7.18.5. The Phase 6A frontend baseline was **39 tests**. Current Phase 7C regression results and test-isolation notes are recorded in [PHASE7C_REPORT.md](PHASE7C_REPORT.md). The production build still reports the large deferred CPU Internals Three.js chunk advisory.
 
 ## Environment and commands (Windows PowerShell)
 

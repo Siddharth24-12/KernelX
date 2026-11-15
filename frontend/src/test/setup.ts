@@ -1,8 +1,15 @@
 import '@testing-library/jest-dom/vitest'
 import { cleanup } from '@testing-library/react'
-import { afterEach } from 'vitest'
+import { afterEach, vi } from 'vitest'
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.restoreAllMocks()
+  vi.resetAllMocks()
+  vi.useRealTimers()
+  localStorage.clear()
+  sessionStorage.clear()
+})
 
 class ResizeObserverMock implements ResizeObserver {
   observe() { /* jsdom has no layout engine to observe */ }
