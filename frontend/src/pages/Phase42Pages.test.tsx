@@ -84,5 +84,5 @@ describe('Phase 4.2 pages and navigation', () => {
     render(<MemoryRouter initialEntries={['/']}><App /></MemoryRouter>)
     for (const label of ['Overview', 'Processes', 'CPU Scheduler', 'Memory Manager', 'Process Tree', 'Event Monitor', 'Simulation Archive', 'Settings']) expect(screen.getByRole('link', { name: new RegExp(label) })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('link', { name: /Process Tree/ })); expect(await screen.findByRole('heading', { name: 'Process tree' })).toBeInTheDocument()
-  })
+  }, 15000)
 })

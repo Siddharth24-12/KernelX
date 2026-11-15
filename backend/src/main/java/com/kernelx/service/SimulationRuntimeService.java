@@ -2,6 +2,17 @@ package com.kernelx.service;
 
 import com.kernelx.dto.CreateProcessRequest;
 import com.kernelx.dto.ProcessResponse;
+import com.kernelx.dto.PmuListSnapshot;
+import com.kernelx.dto.PmuTrace;
+import com.kernelx.dto.PmuTraceSummary;
+import com.kernelx.dto.AluTableSnapshot;
+import com.kernelx.dto.AluTrace;
+import com.kernelx.dto.AluTraceSummary;
+import com.kernelx.dto.FpbLiveSnapshot;
+import com.kernelx.dto.FpbTrace;
+import com.kernelx.dto.FpbTraceSummary;
+import com.kernelx.dto.AnalyticsRuntimeState;
+import com.kernelx.dto.ProcessAnalyticsRow;
 import com.kernelx.dto.SimulationStartRequest;
 import com.kernelx.model.MemoryAllocationStrategy;
 import com.kernelx.model.MemorySnapshot;
@@ -22,20 +33,23 @@ public class SimulationRuntimeService {
     private final EventManager events;
     private final ProcessManager processes;
     private final SchedulingService scheduler;
+    private final SimulationAnalyticsHistory analyticsHistory;
     private MemoryManager memory;
     private SimulationEngine engine;
     private MemoryAllocationStrategy defaultMemoryStrategy = MemoryAllocationStrategy.FIRST_FIT;
     private int totalMemory;
 
     public SimulationRuntimeService(EventManager events, ProcessManager processes, SchedulingService scheduler,
+                                    SimulationAnalyticsHistory analyticsHistory,
                                     @Value("${kernelx.simulation.total-memory:1024}") int totalMemory) {
         if (totalMemory <= 0) throw new IllegalArgumentException("Default total memory must be positive");
         this.events = events;
         this.processes = processes;
         this.scheduler = scheduler;
+        this.analyticsHistory = analyticsHistory;
         this.totalMemory = totalMemory;
         this.memory = new MemoryManager(totalMemory, events);
-        this.engine = new SimulationEngine(processes, memory, events, scheduler);
+        this.engine = new SimulationEngine(processes, memory, events, scheduler, analyticsHistory);
     }
 
     public synchronized ProcessResponse createProcess(CreateProcessRequest request) {
@@ -45,12 +59,57 @@ public class SimulationRuntimeService {
         return ProcessResponse.from(process);
     }
 
+    /** Loads and starts one validated workload as a single serialized runtime mutation. */
+    public synchronized List<ProcessResponse> executeWorkload(List<CreateProcessRequest> requests,
+                                                               SimulationStartRequest configuration) {
+        configuration.toSimulationConfiguration();
+        List<ProcessResponse> created = loadWorkload(requests);
+        start(configuration);
+        return created;
+    }
+
+    /** Adds a workload's process definitions without starting the simulation. */
+    public synchronized List<ProcessResponse> loadWorkload(List<CreateProcessRequest> requests) {
+        if (engine.state().status() != SimulationStatus.READY) {
+            throw new ConflictException("Reset the simulation before loading a workload");
+        }
+        if (!processes.listProcesses().isEmpty()) {
+            throw new ConflictException("Terminate existing processes before loading a workload");
+        }
+        List<ProcessResponse> created = new java.util.ArrayList<>();
+        for (CreateProcessRequest request : requests) created.add(createProcess(request));
+        return List.copyOf(created);
+    }
+
     public synchronized List<ProcessResponse> listProcesses() {
         return processes.listProcesses().stream().map(ProcessResponse::from).toList();
     }
 
     public synchronized List<com.kernelx.dsa.ProcessTree.SnapshotNode> processTreeSnapshot() {
         return processes.hierarchySnapshot();
+    }
+    public synchronized com.kernelx.dto.PtuSnapshot ptuSnapshot() {
+        List<com.kernelx.dto.PtuNodeSnapshot> nodes = processes.hierarchyLinksSnapshot().stream()
+                .map(n -> new com.kernelx.dto.PtuNodeSnapshot(n.pid(), n.pid(), n.name(), n.state(), n.parentPid(), n.firstChildPid(), n.nextSiblingPid())).toList();
+        List<Integer> roots = nodes.stream().filter(n -> n.parentPid() == -1).map(com.kernelx.dto.PtuNodeSnapshot::pid).toList();
+        return new com.kernelx.dto.PtuSnapshot(processes.hierarchySize(), roots.size(), roots, nodes, nodes.size() >= 2048 && processes.hierarchySize() > nodes.size());
+    }
+    public synchronized List<com.kernelx.dto.PtuTraceSummary> ptuTraces() { return processes.hierarchyTraces(); }
+    public synchronized com.kernelx.dto.PtuTrace ptuTrace(String id) { return processes.hierarchyTrace(id).orElseThrow(() -> new ResourceNotFoundException("PTU trace not found: " + id)); }
+
+    public synchronized PmuListSnapshot processListSnapshot() { return processes.processListSnapshot(); }
+
+    public synchronized List<PmuTraceSummary> processListTraces() { return processes.processListTraces(); }
+
+    public synchronized PmuTrace processListTrace(String traceId) {
+        return processes.processListTrace(traceId)
+                .orElseThrow(() -> new ResourceNotFoundException("Process-list trace " + traceId + " was not found"));
+    }
+
+    public synchronized AluTableSnapshot aluSnapshot() { return processes.aluTableSnapshot(); }
+    public synchronized List<AluTraceSummary> aluTraces() { return processes.aluTraces(); }
+    public synchronized AluTrace aluTrace(String traceId) {
+        return processes.aluTrace(traceId).orElseThrow(() -> new ResourceNotFoundException("ALU trace " + traceId + " was not found"));
     }
 
     public synchronized ProcessResponse getProcess(int pid) { return ProcessResponse.from(requireProcess(pid)); }
@@ -91,7 +150,7 @@ public class SimulationRuntimeService {
             }
             totalMemory = request.totalMemory();
             memory = new MemoryManager(totalMemory, events);
-            engine = new SimulationEngine(processes, memory, events, scheduler);
+            engine = new SimulationEngine(processes, memory, events, scheduler, analyticsHistory);
         }
         defaultMemoryStrategy = request.memoryAllocationStrategy();
         engine.setSpeed(request.speed() == null ? 1.0 : request.speed());
@@ -143,9 +202,23 @@ public class SimulationRuntimeService {
 
     public synchronized List<SystemEvent> events() { return events.snapshot(); }
     public synchronized List<ProcessControlBlock> processSnapshots() { return processes.listProcesses(); }
+    public synchronized AnalyticsRuntimeState analyticsRuntimeState() {
+        List<ProcessAnalyticsRow> rows = processes.listProcesses().stream().map(process -> new ProcessAnalyticsRow(
+                process.getPid(), process.getName(), process.getState(), process.getArrivalTime(), process.getBurstTime(),
+                process.getRemainingTime(), process.getCompletionTime(), process.getWaitingTime(),
+                process.getTurnaroundTime(), process.getResponseTime())).toList();
+        SchedulingResult result = engine.schedulingResult();
+        return new AnalyticsRuntimeState(engine.state(), engine.memorySnapshot(), rows,
+                result == null ? List.of() : result.gantt());
+    }
     public synchronized SimulationStatus status() { return engine.state().status(); }
     public synchronized int totalMemory() { return totalMemory; }
     public synchronized MemoryAllocationStrategy defaultMemoryStrategy() { return defaultMemoryStrategy; }
+    public synchronized FpbLiveSnapshot fpbSnapshot() { return scheduler.fpbSnapshot(); }
+    public synchronized List<FpbTraceSummary> fpbTraces() { return scheduler.fpbTraces(); }
+    public synchronized FpbTrace fpbTrace(String traceId) {
+        return scheduler.fpbTrace(traceId).orElseThrow(() -> new ResourceNotFoundException("FPB trace " + traceId + " was not found"));
+    }
 
     private ProcessControlBlock requireProcess(int pid) {
         ProcessControlBlock process = processes.getProcess(pid);

@@ -3,6 +3,9 @@ package com.kernelx.service;
 import com.kernelx.dsa.CustomQueue;
 import com.kernelx.dsa.MaxHeap;
 import com.kernelx.dto.HeapEntrySnapshot;
+import com.kernelx.dto.FpbLiveSnapshot;
+import com.kernelx.dto.FpbTrace;
+import com.kernelx.dto.FpbTraceSummary;
 import com.kernelx.model.GanttSegment;
 import com.kernelx.model.ProcessMetrics;
 import com.kernelx.model.SchedulingAlgorithm;
@@ -13,17 +16,22 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 /** Deterministic, Spring-independent schedulers. Ready-set operations use KernelX's custom queue/heap. */
 public final class SchedulingService {
-    private static final class Work {
+    static final class Work {
         private final SchedulingProcess process;
         private int remaining;
         private int firstStart = -1;
         private int completion = -1;
-        private Work(SchedulingProcess process) { this.process = process; this.remaining = process.burstTime(); }
+        Work(SchedulingProcess process) { this.process = process; this.remaining = process.burstTime(); }
         private HeapEntrySnapshot snapshot() {
             return new HeapEntrySnapshot(process.pid(), process.name(), process.priority(),
+                    process.arrivalTime(), process.burstTime(), remaining);
+        }
+        com.kernelx.dto.FpbProcessSnapshot fpbSnapshot() {
+            return new com.kernelx.dto.FpbProcessSnapshot(process.pid(), process.name(), process.priority(),
                     process.arrivalTime(), process.burstTime(), remaining);
         }
     }
@@ -35,14 +43,22 @@ public final class SchedulingService {
         boolean isEmpty();
         default void simulationTime(int time) { }
         default List<HeapEntrySnapshot> snapshot() { return List.of(); }
+        default void complete() { }
     }
 
     private static final class FifoReady implements ReadySet {
-        private final CustomQueue<Work> queue = new CustomQueue<>();
+        private final CustomQueue<Work> queue;
+        private final FpbTraceRecorder.RunSession trace;
+        private FifoReady(FpbTraceRecorder.RunSession trace) {
+            this.trace = trace;
+            this.queue = new CustomQueue<>(trace);
+            trace.beginQueue(queue.snapshot(512));
+        }
         public void offer(Work work) { queue.enqueue(work); }
         public Work poll() { return queue.dequeue(); }
         public Work peek() { return queue.peek(); }
         public boolean isEmpty() { return queue.isEmpty(); }
+        @Override public void complete() { trace.complete(queue.snapshot(512)); }
     }
 
     private static final class HeapReady implements ReadySet {
@@ -68,9 +84,18 @@ public final class SchedulingService {
     }
 
     private final HeapTraceRecorder heapTraces;
+    private final FpbTraceRecorder fpbTraces;
 
-    public SchedulingService() { this(new HeapTraceRecorder()); }
-    public SchedulingService(HeapTraceRecorder heapTraces) { this.heapTraces = Objects.requireNonNull(heapTraces, "heapTraces"); }
+    public SchedulingService() { this(new HeapTraceRecorder(), new FpbTraceRecorder()); }
+    public SchedulingService(HeapTraceRecorder heapTraces) { this(heapTraces, new FpbTraceRecorder()); }
+    public SchedulingService(HeapTraceRecorder heapTraces, FpbTraceRecorder fpbTraces) {
+        this.heapTraces = Objects.requireNonNull(heapTraces, "heapTraces");
+        this.fpbTraces = Objects.requireNonNull(fpbTraces, "fpbTraces");
+    }
+
+    public FpbLiveSnapshot fpbSnapshot() { return fpbTraces.liveSnapshot(); }
+    public List<FpbTraceSummary> fpbTraces() { return fpbTraces.listTraces(); }
+    public Optional<FpbTrace> fpbTrace(String traceId) { return fpbTraces.getTrace(traceId); }
 
     public SchedulingResult fcfs(List<SchedulingProcess> processes) {
         return run(processes, SchedulingAlgorithm.FCFS, 0, false);
@@ -113,7 +138,9 @@ public final class SchedulingService {
 
         HeapTraceRecorder.RunSession heapTrace = algorithm == SchedulingAlgorithm.SJF || algorithm == SchedulingAlgorithm.PRIORITY
                 ? heapTraces.beginRun(algorithm, preemptive, arrivals.length) : null;
-        ReadySet ready = createReadySet(algorithm, heapTrace);
+        FpbTraceRecorder.RunSession fpbTrace = algorithm == SchedulingAlgorithm.FCFS || algorithm == SchedulingAlgorithm.ROUND_ROBIN
+                ? fpbTraces.beginRun(algorithm, arrivals.length) : null;
+        ReadySet ready = createReadySet(algorithm, heapTrace, fpbTrace);
         List<GanttSegment> gantt = new ArrayList<>();
         int nextArrival = 0, completed = 0, time = 0, quantumUsed = 0;
         Work running = null;
@@ -165,6 +192,7 @@ public final class SchedulingService {
             }
         }
 
+        ready.complete();
         if (heapTrace != null) heapTrace.complete(ready.snapshot());
 
         List<ProcessMetrics> metrics = new ArrayList<>(arrivals.length);
@@ -187,9 +215,10 @@ public final class SchedulingService {
                 time);
     }
 
-    private ReadySet createReadySet(SchedulingAlgorithm algorithm, HeapTraceRecorder.RunSession trace) {
+    private ReadySet createReadySet(SchedulingAlgorithm algorithm, HeapTraceRecorder.RunSession trace,
+                                    FpbTraceRecorder.RunSession fpbTrace) {
         return switch (algorithm) {
-            case FCFS, ROUND_ROBIN -> new FifoReady();
+            case FCFS, ROUND_ROBIN -> new FifoReady(fpbTrace);
             case SJF -> new HeapReady((left, right) -> {
                 int comparison = Integer.compare(right.process.burstTime(), left.process.burstTime());
                 if (comparison == 0) comparison = Integer.compare(right.process.arrivalTime(), left.process.arrivalTime());

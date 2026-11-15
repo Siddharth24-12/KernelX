@@ -40,4 +40,100 @@
   "pid" : null,
   "type" : "SIMULATION_STARTED",
   "description" : "Started PRIORITY simulation for 5 processes"
+}, {
+  "eventId" : 8,
+  "simulationTime" : 0,
+  "pid" : 1,
+  "type" : "PROCESS_CREATED",
+  "description" : "Process Chrome created"
+}, {
+  "eventId" : 9,
+  "simulationTime" : 0,
+  "pid" : 2,
+  "type" : "PROCESS_CREATED",
+  "description" : "Process Spotify created"
+}, {
+  "eventId" : 10,
+  "simulationTime" : 0,
+  "pid" : 3,
+  "type" : "PROCESS_CREATED",
+  "description" : "Process VSCode created"
+}, {
+  "eventId" : 11,
+  "simulationTime" : 0,
+  "pid" : 4,
+  "type" : "PROCESS_CREATED",
+  "description" : "Process Discord created"
+}, {
+  "eventId" : 12,
+  "simulationTime" : 0,
+  "pid" : 5,
+  "type" : "PROCESS_CREATED",
+  "description" : "Process Terminal created"
+}, {
+  "eventId" : 13,
+  "simulationTime" : 0,
+  "pid" : 6,
+  "type" : "PROCESS_CREATED",
+  "description" : "Process Notepad created"
+}, {
+  "eventId" : 14,
+  "simulationTime" : 0,
+  "pid" : 3,
+  "type" : "STATE_CHANGED",
+  "description" : "NEW -> TERMINATED: Process terminated"
+}, {
+  "eventId" : 15,
+  "simulationTime" : 0,
+  "pid" : 3,
+  "type" : "PROCESS_TERMINATED",
+  "description" : "Process terminated"
+}, {
+  "eventId" : 16,
+  "simulationTime" : 0,
+  "pid" : 1,
+  "type" : "PROCESS_CREATED",
+  "description" : "Process Chrome created"
+}, {
+  "eventId" : 17,
+  "simulationTime" : 0,
+  "pid" : 2,
+  "type" : "PROCESS_CREATED",
+  "description" : "Process Spotify created"
+}, {
+  "eventId" : 18,
+  "simulationTime" : 0,
+  "pid" : 3,
+  "type" : "PROCESS_CREATED",
+  "description" : "Process VSCode created"
+}, {
+  "eventId" : 19,
+  "simulationTime" : 0,
+  "pid" : 2,
+  "type" : "STATE_CHANGED",
+  "description" : "NEW -> TERMINATED: Process terminated"
+}, {
+  "eventId" : 20,
+  "simulationTime" : 0,
+  "pid" : 2,
+  "type" : "PROCESS_TERMINATED",
+  "description" : "Process terminated"
+}, {
+  "eventId" : 21,
+  "simulationTime" : 0,
+  "pid" : 1,
+  "type" : "PROCESS_CREATED",
+  "description" : "Process compiler created"
+}, {
+  "eventId" : 22,
+  "simulationTime" : 0,
+  "pid" : 2,
+  "type" : "PROCESS_CREATED",
+  "description" : "Process idk created"
+}, {
+  "eventId" : 23,
+  "simulationTime" : 0,
+  "pid" : 3,
+  "type" : "PROCESS_CREATED",
+  "description" : "Process idk2 created"
 } ]

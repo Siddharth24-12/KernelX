@@ -1,8 +1,34 @@
 # KernelX Development Guide
 
-## Current checkpoint
+## Current checkpoint: Phase 6C
 
-**Phase 5B — processor die and heap replay implemented.** Phase 4 frontend remains complete. All eight pages are implemented: Overview, Processes, CPU Scheduler, Memory Manager, Process Tree, Event Monitor, Simulation Archive and Settings. The process-tree REST traversal endpoint is read-only and cycle-safe. Phase 5B implements an interactive processor die and actual Java MaxHeap traces. Replay is bounded, historical and read-only; Phase 5C and later remain not started. See [PHASE5A_DESIGN.md](PHASE5A_DESIGN.md).
+**Phase 5F — Process Tree Visualization Unit.** The PTU observes actual operations inside the existing Java `ProcessTree` first-child/next-sibling forest. Its flat link snapshot and bounded operation traces are read-only on retrieval; 32 traces × 2,048 steps are held in memory and cleared on restart. UI replay highlights real pointer changes over each trace's final tree; intermediate full-tree snapshots are not recorded. See [PHASE5F_DESIGN.md](PHASE5F_DESIGN.md) and the prior 5A/5D/5E design notes.
+
+**Phase 6A — Workload Studio implemented.** Workload process definitions and scheduler settings live in separate `workloads.json` storage. Six deterministic built-in templates are read-only. Validation checks constraints, PID conflicts, parent references and cycles. Loading is serialized through `SimulationRuntimeService`, creates actual process entries in parent-first order, and leaves the engine ready for the existing Scheduler page. Direct execution creates the entries and starts the existing scheduler. Both require an empty process table and `READY` simulation. `WorkloadApiIntegrationTest` uses a temporary data directory.
+
+Phase 6A verification: `mvn test` — **55 passed**; `npm test` — **39 passed**; `npm run typecheck`, `npm run build`, and root `git diff --check` passed. Production build retains the existing >500 kB CPU Internals chunk warning.
+
+Process-list diagnostic reads (`GET /api/processes` and `/api/dsa/pmu/*`) use direct linked-list snapshots and do not emit PMU operations. Mutating workflows and explicitly instrumented traversal/search calls still produce real traces. This keeps the app shell's 3.5-second polling from evicting useful history.
+
+## Phase 6B — Algorithm Comparison
+
+The comparison workspace executes 2–12 unique scheduler configurations against the same copied `WorkloadDefinition` snapshot. For every configuration, `ComparisonService` constructs fresh `SchedulingProcess` inputs and obtains a new `SchedulingService`; the existing Java `schedule(...)` implementation remains the only source of scheduling behavior. The service does not inject or call `SimulationRuntimeService`, `SimulationEngine`, `ProcessManager`, or `MemoryManager`, so a comparison cannot advance ticks, mutate live PCBs/memory/events, or add live DSA traces. A failed run aborts before `comparisons.json` is appended.
+
+Results persist the workload snapshot and exact run configuration alongside the backend Gantt and `ProcessMetrics`. CPU utilization is calculated as non-idle Gantt duration divided by total elapsed schedule time; throughput is process count divided by that same elapsed time. Both use the scheduler's integer time model and include leading idle time in the denominator. A nonpositive total time is treated as a failed run. Waiting, turnaround, and response winners minimize; utilization and throughput maximize. Exact equal values remain a tie, and the UI does not claim a universally best algorithm.
+
+Comparison reports use `JsonFileRepository<ComparisonReport>` and `comparisons.json`, with the repository's synchronized temporary-file and atomic replacement behavior. API: `POST /api/comparisons`, `GET /api/comparisons`, `GET /api/comparisons/{id}`, and `DELETE /api/comparisons/{id}`. The Algorithm Comparison page is routed at `/comparison`; its workload and report history calls use typed Axios modules. Backend integration tests use a temporary JSON directory and cover all five scheduling modes, RR quantum variants, deterministic output, metrics/ties, idle Gantt, persistence CRUD, invalid input, failure isolation, and preservation of active runtime/workload data.
+
+Phase 6B verification baseline: `mvn test` — **57 passed, 0 failed, 0 errors, 0 skipped**; `npm test` — **44 passed**; `npm run typecheck`, `npm run build`, and `git diff --check` passed. The build reports the existing large CPU Internals chunk warning.
+
+## Phase 6C — System Analytics Observatory
+
+`GET /api/analytics/snapshot` combines the active simulator's state, memory blocks, process PCB metrics, the actual backend schedule and tick telemetry in one synchronized runtime snapshot. `SimulationAnalyticsHistory` is shared by the runtime engine and analytics service. The engine emits exactly one sample after each actual tick, with the PID that executed that interval (null for idle), resulting simulation time, ready/waiting/completed counts and cumulative busy/idle ticks. Utilization is cumulative busy ticks divided by total observed ticks. No sample is generated by polling, reads, or unexecuted schedule plans. Sampling is one point per simulated tick; a 4,096-entry ring keeps the latest samples across resets and is cleared by backend restart.
+
+Memory metrics are projections over `MemoryManager.snapshot()`. Allocation failures that occur because no contiguous free block can satisfy a request now emit a persisted `MEMORY_ALLOCATION_FAILED` event, while the existing API still returns its conflict response. External fragmentation is `100 × (1 − largestFreeBlock / freeMemory)`, or zero when `freeMemory` is zero. It is not a substitute for free capacity.
+
+Process counts and per-process metrics are current PCB snapshots; historical creation, state change, termination, allocation and other events are from persistent `event_logs.json`. Event DTOs have event IDs and simulation time, but no wall clock or run ID. Therefore the analytics UI orders lifecycle rows by event ID and aggregates frequency at equal simulation ticks, including repeats after resets. Reset itself is not expanded into fabricated per-process transitions. Historical performance filters `ComparisonReport` records from `comparisons.json`; those remain separate from live CPU observations.
+
+The responsive `/analytics` workspace refreshes live analytics every 3.5 seconds and loads persisted events and saved comparisons on entry/manual refresh. All reads are diagnostic and do not call instrumented DSA operations. Recharts present CPU utilization history, memory blocks, process state counts, event frequency/type distributions and filtered historical metric series; observed Gantt intervals come from actual tick samples, while scheduled/completed schedule data and per-process metrics come from the backend. Phase 6C verification: `mvn test` — **61 passed, 0 failed, 0 errors, 0 skipped**; `npm test` — **49 passed** across 12 files; `npm run typecheck`, `npm run build`, and root `git diff --check` passed. The production build reports the existing CPU Internals chunk size warning. Phase 6D has not started.
 
 ## Phase 3 implementation
 
@@ -11,6 +37,7 @@
 - `backend/data/simulations.json`: completed-run snapshots containing schedule options, Gantt segments, process snapshots/metrics, memory state, and event history.
 - `backend/data/configurations.json`: named algorithm, quantum, priority-mode, memory, and speed settings.
 - `backend/data/event_logs.json`: structured persistent `SystemEvent` records.
+- `backend/data/comparisons.json`: completed Phase 6B reports with immutable workload snapshots and backend schedule results.
 - Separate archive/configuration/event services use `JsonFileRepository<T>`; records are persistence DTOs and do not capture custom DSA internals.
 - Missing files/directories are created. Invalid JSON or wrong-root/null records are quarantined as `.corrupt-<uuid>.json`, then the active file is initialized to an empty array. Original corrupted bytes remain available.
 - Writes are synchronized per repository, written to a unique same-directory temporary file, flushed, then replaced atomically where supported (replacement move is the fallback).
@@ -19,6 +46,7 @@
 ### REST and runtime safety
 
 - Process, simulation, scheduling, memory, event, archive, and configuration controllers expose the routes documented in `API.md`.
+- Workload CRUD uses the shared atomic JSON repository; templates are generated and never persisted. Workload execution delegates to the existing synchronized runtime and does not introduce another scheduler.
 - `SimulationRuntimeService` is the singleton API boundary for one session. Its synchronized methods serialize process mutations, ticks, and snapshots. Process and memory edits are rejected while a run is active/paused so the start-time scheduling plan remains consistent.
 - `@RestControllerAdvice` returns one error DTO and maps invalid input to 400, missing resources to 404, invalid lifecycle/resource conflicts to 409, and storage/unexpected failures to a generic 500 response without stack traces.
 - Central CORS policy allows the future Vite origin `http://localhost:5173`.
@@ -83,6 +111,8 @@ See [API.md](API.md) for every route, body/response examples, success/error stat
 - `/api/memory`
 - `/api/simulations`
 - `/api/configurations`
+- `/api/workloads`
+- `/api/dsa/fpb` (read-only FIFO queue status and history)
 - `/api/health`
 
 Frontend API mapping: [FRONTEND_API_MAPPING.md](FRONTEND_API_MAPPING.md).
@@ -106,15 +136,15 @@ npm test
 npm run build
 ```
 
-Verified with Node 24.15.0 / npm 11.12.1, Vite 8.3.8, Vitest 5.1.0 and React Router 7.18.5. TypeScript check and production build pass; **20 frontend tests pass**. Coverage includes tree empty/error/selection, event filters, archive operations, settings persistence/health, scheduler defaults, navigation and CPU Internals replay projection/controls.
+Verified with Node 24.15.0 / npm 11.12.1, Vite 8.3.8, Vitest 5.1.0 and React Router 7.18.5. TypeScript check and production build pass; the Phase 6A full frontend suite has **39 tests passing**. Coverage includes Workload Studio editing, validation/load/run flow, empty/error states and route navigation alongside FPB, ALU, PMU/PDU, tree, events, archive and settings.
 
 ## Environment and commands (Windows PowerShell)
 
-This Codex shell inherits Java 8 on PATH and does not resolve `javac`/`mvn`, although JDK 21.0.13 is installed at `C:\Program Files\Eclipse Adoptium\jdk-21.0.13.9-hotspot`. The verified build used Apache Maven 3.10.0 in `%TEMP%\kernelx-build-tools\apache-maven-3.10.0`. Configure the current terminal if necessary:
+This Codex shell inherits Java 8 on PATH and does not resolve `javac`/`mvn`, although JDK 21.0.13 is installed at `C:\Program Files\Eclipse Adoptium\jdk-21.0.13.9-hotspot`. The verified build used Apache Maven 3.9.11 in `%TEMP%\apache-maven-3.9.11`. Configure the current terminal if necessary:
 
 ```powershell
 $env:JAVA_HOME = 'C:\Program Files\Eclipse Adoptium\jdk-21.0.13.9-hotspot'
-$env:MAVEN_HOME = Join-Path $env:TEMP 'kernelx-build-tools\apache-maven-3.10.0'
+$env:MAVEN_HOME = Join-Path $env:TEMP 'apache-maven-3.9.11'
 $env:Path = "$env:JAVA_HOME\bin;$env:MAVEN_HOME\bin;$env:Path"
 java -version
 javac -version
@@ -150,7 +180,9 @@ The running application writes to `backend/data/` when started from the backend 
 
 ## Test results
 
-Final complete run: `mvn test` on Java 21.0.13 / Maven 3.10.0 — **34 tests, 0 failures, 0 errors, 0 skipped**. It includes process-tree empty/nested API responses, cycle-safe custom-tree traversal, JSON persistence, API lifecycle/archive routes, validation and CORS preflight, plus heap trace recording and API integration.
+Phase 5G baseline: `mvn test` on Java 21.0.13 / Maven 3.9.11 — **54 tests, 0 failures, 0 errors, 0 skipped**. Phase 6B full verification: `mvn test` — **57 tests, 0 failures, 0 errors, 0 skipped**; `npm test` — **44 tests passed across 11 files**; `npm run typecheck` and `npm run build` passed; root `git diff --check` exited 0. The new tests cover API execution/persistence, all supported scheduling modes and Round Robin quanta, deterministic results, idle segments and metrics, active-state/workload/trace preservation, failure isolation, workload and algorithm selection, validation, history CRUD, loading/errors and navigation.
+
+Frontend verification: **34 tests passed**; `npm run typecheck` and `npm run build` passed. PTU UI tests cover link rendering, process selection, empty/error states, trace selection, and read-only forward/backward replay controls.
 
 The API integration tests use real Spring controllers, services, runtime, Jackson repositories, and temporary JSON files; they do not mock API results.
 
@@ -168,8 +200,8 @@ The API integration tests use real Spring controllers, services, runtime, Jackso
 2. Simulation engine — complete.
 3. JSON persistence and REST API — complete.
 4. Frontend foundation and all eight pages — complete.
-5. CPU internals visualization — Stage 5A and Stage 5B complete; Stage 5C and later not started.
-6. Integration and polishing — deferred.
+5. CPU internals visualization — Phases 5A–5F complete.
+6. Workload Studio, Algorithm Comparison and System Analytics — Phases 6A–6C complete; Phase 6D not started.
 7. Final documentation and demo workflow — deferred.
 
-Phase 4 is complete. Stage 5B remains gated on review of the Stage 5A design. Do not start Phase 6.
+Phases 4, 5A–5F and 6A–6C are complete. The FPB records only actual FCFS/Round Robin ready-queue operations. The PTU records actual operations in the live custom process forest. Both are bounded, in-memory diagnostic histories and do not persist across restart. Phase 6C analytics history is also bounded in memory; Phase 6D has not started.

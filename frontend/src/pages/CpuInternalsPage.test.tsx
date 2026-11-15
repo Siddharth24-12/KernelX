@@ -9,6 +9,10 @@ import type { HeapEntrySnapshot, HeapRunTrace, HeapTraceStep } from '../types/ap
 
 const mocks = vi.hoisted(() => ({ runs: vi.fn(), run: vi.fn() }))
 vi.mock('../api/heapTraces', () => ({ heapTracesApi: { runs: mocks.runs, run: mocks.run } }))
+vi.mock('../api/pmu', () => ({ pmuApi: { snapshot: vi.fn().mockResolvedValue({ listId: 'list-1', headNodeId: null, tailNodeId: null, size: 0, nodes: [], truncated: false }), traces: vi.fn().mockResolvedValue([]), trace: vi.fn() } }))
+vi.mock('../api/alu', () => ({ aluApi: { snapshot: vi.fn().mockResolvedValue({ tableId: 'table-1', capacity: 16, size: 0, loadFactor: 0, buckets: [], truncated: false }), traces: vi.fn().mockResolvedValue([]), trace: vi.fn() } }))
+vi.mock('../api/fpb', () => ({ fpbApi: { snapshot: vi.fn().mockResolvedValue({ active: false, queue: null, message: 'No active scheduler queue' }), traces: vi.fn().mockResolvedValue([]), trace: vi.fn() } }))
+vi.mock('../api/ptu', () => ({ ptuApi: { snapshot: vi.fn().mockResolvedValue({ size: 0, rootCount: 0, rootPids: [], nodes: [], truncated: false }), traces: vi.fn().mockResolvedValue([]), trace: vi.fn() } }))
 vi.mock('../components/internals/ProcessorDieScene', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../components/internals/ProcessorDieScene')>()
   const React = await import('react')
@@ -78,7 +82,7 @@ describe('CPU Internals Stage 5B', () => {
     expect(screen.getByTestId('die-scene')).toHaveAttribute('data-focused', 'true')
     fireEvent.click(screen.getByRole('button', { name: 'Back to Processor' }))
     expect(screen.getByTestId('die-scene')).toHaveAttribute('data-focused', 'false')
-    fireEvent.click(screen.getByRole('button', { name: 'Reset camera' }))
+    fireEvent.click(screen.getAllByRole('button', { name: 'Reset camera' })[0])
     fireEvent.change(screen.getByLabelText('SCHEDULING RUN'), { target: { value: 'run-sjf-43' } })
     await waitFor(() => expect(mocks.run).toHaveBeenCalledWith('run-sjf-43'))
     expect(await screen.findByText('SJF')).toBeInTheDocument()

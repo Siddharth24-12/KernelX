@@ -3,6 +3,12 @@ package com.kernelx.service;
 import com.kernelx.dsa.CustomHashTable;
 import com.kernelx.dsa.ProcessLinkedList;
 import com.kernelx.dsa.ProcessTree;
+import com.kernelx.dto.PmuListSnapshot;
+import com.kernelx.dto.PmuTrace;
+import com.kernelx.dto.PmuTraceSummary;
+import com.kernelx.dto.AluTableSnapshot;
+import com.kernelx.dto.AluTrace;
+import com.kernelx.dto.AluTraceSummary;
 import com.kernelx.model.ProcessControlBlock;
 import com.kernelx.model.ProcessState;
 import com.kernelx.model.SchedulingProcess;
@@ -10,16 +16,37 @@ import com.kernelx.model.SystemEventType;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 /** Process registry backed by the Phase 1 custom PCB list, PID hash table, and process tree. */
 public final class ProcessManager {
-    private final ProcessLinkedList processes = new ProcessLinkedList();
-    private final CustomHashTable<Integer, ProcessControlBlock> byPid = new CustomHashTable<>();
-    private final ProcessTree hierarchy = new ProcessTree();
+    private final ProcessLinkedList processes;
+    private final CustomHashTable<Integer, ProcessControlBlock> byPid;
+    private final ProcessTree hierarchy;
+    private final ProcessTreeTraceRecorder treeTraces;
     private final EventManager events;
+    private final ProcessListTraceRecorder processListTraces;
+    private final AluTraceRecorder aluTraces;
     private MemoryManager memoryManager;
 
-    public ProcessManager(EventManager events) { this.events = Objects.requireNonNull(events, "events"); }
+    public ProcessManager(EventManager events) { this(events, new ProcessListTraceRecorder(), new AluTraceRecorder(), new ProcessTreeTraceRecorder()); }
+
+    public ProcessManager(EventManager events, ProcessListTraceRecorder processListTraces) {
+        this(events, processListTraces, new AluTraceRecorder(), new ProcessTreeTraceRecorder());
+    }
+
+    public ProcessManager(EventManager events, ProcessListTraceRecorder processListTraces, AluTraceRecorder aluTraces) {
+        this(events, processListTraces, aluTraces, new ProcessTreeTraceRecorder());
+    }
+    public ProcessManager(EventManager events, ProcessListTraceRecorder processListTraces, AluTraceRecorder aluTraces, ProcessTreeTraceRecorder treeTraces) {
+        this.events = Objects.requireNonNull(events, "events");
+        this.processListTraces = Objects.requireNonNull(processListTraces, "processListTraces");
+        this.aluTraces = Objects.requireNonNull(aluTraces, "aluTraces");
+        this.treeTraces = Objects.requireNonNull(treeTraces, "treeTraces");
+        this.hierarchy = new ProcessTree(this.treeTraces::record);
+        this.byPid = new CustomHashTable<>(aluTraces);
+        this.processes = new ProcessLinkedList(processListTraces);
+    }
 
     synchronized void attachMemoryManager(MemoryManager memoryManager) {
         this.memoryManager = Objects.requireNonNull(memoryManager, "memoryManager");
@@ -100,10 +127,25 @@ public final class ProcessManager {
     public synchronized ProcessControlBlock getProcess(int pid) { return byPid.get(pid); }
 
     public synchronized List<ProcessControlBlock> listProcesses() {
-        List<ProcessControlBlock> result = new ArrayList<>(processes.size());
-        processes.traverse(result::add);
-        return List.copyOf(result);
+        return processes.valuesSnapshot();
     }
+
+    /** Snapshot reads inspect the custom links directly and do not create trace operations. */
+    public synchronized PmuListSnapshot processListSnapshot() {
+        return ProcessListTraceRecorder.liveSnapshot(processes.snapshot());
+    }
+
+    public synchronized List<PmuTraceSummary> processListTraces() {
+        return processListTraces.listTraces();
+    }
+
+    public synchronized Optional<PmuTrace> processListTrace(String traceId) {
+        return processListTraces.getTrace(traceId);
+    }
+
+    public synchronized AluTableSnapshot aluTableSnapshot() { return AluTraceRecorder.liveSnapshot(byPid.snapshot()); }
+    public synchronized List<AluTraceSummary> aluTraces() { return aluTraces.listTraces(); }
+    public synchronized Optional<AluTrace> aluTrace(String traceId) { return aluTraces.getTrace(traceId); }
 
     public synchronized List<ProcessControlBlock> hierarchyPreOrder() {
         List<ProcessControlBlock> result = new ArrayList<>(hierarchy.size());
@@ -114,6 +156,10 @@ public final class ProcessManager {
     public synchronized List<com.kernelx.dsa.ProcessTree.SnapshotNode> hierarchySnapshot() {
         return hierarchy.snapshot();
     }
+    public synchronized List<com.kernelx.dsa.ProcessTree.LinkSnapshot> hierarchyLinksSnapshot() { return hierarchy.flatSnapshot(); }
+    public synchronized List<com.kernelx.dto.PtuTraceSummary> hierarchyTraces() { return treeTraces.list(); }
+    public synchronized Optional<com.kernelx.dto.PtuTrace> hierarchyTrace(String id) { return treeTraces.get(id); }
+    public synchronized int hierarchySize() { return hierarchy.size(); }
 
     public synchronized List<SchedulingProcess> schedulingInputs() {
         List<SchedulingProcess> result = new ArrayList<>();

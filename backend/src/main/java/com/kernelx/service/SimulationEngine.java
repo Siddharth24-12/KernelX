@@ -22,6 +22,7 @@ public final class SimulationEngine {
     private final MemoryManager memory;
     private final EventManager events;
     private final SchedulingService scheduler;
+    private final SimulationAnalyticsHistory analyticsHistory;
 
     private SimulationStatus status = SimulationStatus.READY;
     private SimulationConfiguration configuration = SimulationConfiguration.fcfs();
@@ -33,10 +34,16 @@ public final class SimulationEngine {
 
     public SimulationEngine(ProcessManager processes, MemoryManager memory, EventManager events,
                             SchedulingService scheduler) {
+        this(processes, memory, events, scheduler, new SimulationAnalyticsHistory());
+    }
+
+    public SimulationEngine(ProcessManager processes, MemoryManager memory, EventManager events,
+                            SchedulingService scheduler, SimulationAnalyticsHistory analyticsHistory) {
         this.processes = Objects.requireNonNull(processes, "processes");
         this.memory = Objects.requireNonNull(memory, "memory");
         this.events = Objects.requireNonNull(events, "events");
         this.scheduler = Objects.requireNonNull(scheduler, "scheduler");
+        this.analyticsHistory = Objects.requireNonNull(analyticsHistory, "analyticsHistory");
         this.processes.attachMemoryManager(memory);
     }
 
@@ -49,6 +56,7 @@ public final class SimulationEngine {
         List<SchedulingProcess> input = processes.schedulingInputs();
         plan = scheduler.schedule(input, configuration.algorithm(), configuration.timeQuantum(),
                 configuration.preemptivePriority());
+        analyticsHistory.beginRun();
         currentTime = 0;
         segmentIndex = 0;
         runningPid = null;
@@ -117,6 +125,7 @@ public final class SimulationEngine {
             currentTime++;
             events.setSimulationTime(currentTime);
             finishIfComplete();
+            recordAnalyticsTick(null);
             return snapshot();
         }
 
@@ -136,6 +145,7 @@ public final class SimulationEngine {
             runningPid = next.getPid();
         }
 
+        Integer executedPid = runningPid;
         processes.incrementReadyWaitingTimes(currentTime);
         ProcessControlBlock running = processes.getProcess(runningPid);
         processes.updateRemainingTime(runningPid, running.getRemainingTime() - 1);
@@ -152,6 +162,7 @@ public final class SimulationEngine {
         }
 
         finishIfComplete();
+        recordAnalyticsTick(executedPid);
         return snapshot();
     }
 
@@ -196,6 +207,21 @@ public final class SimulationEngine {
             leaveRunningProcess();
             status = SimulationStatus.COMPLETED;
         }
+    }
+
+    private void recordAnalyticsTick(Integer executedPid) {
+        List<ProcessControlBlock> rows = processes.listProcesses();
+        int readyCount = 0;
+        int waitingCount = 0;
+        int completedCount = 0;
+        for (ProcessControlBlock process : rows) {
+            if (process.getState() == ProcessState.READY) readyCount++;
+            if (process.getState() == ProcessState.WAITING) waitingCount++;
+            if (process.getState() == ProcessState.TERMINATED && process.getRemainingTime() == 0) completedCount++;
+        }
+        String processName = executedPid == null ? "IDLE" : rows.stream().filter(process -> process.getPid() == executedPid)
+                .map(ProcessControlBlock::getName).findFirst().orElse("PID " + executedPid);
+        analyticsHistory.recordTick(currentTime, executedPid, processName, readyCount, waitingCount, completedCount);
     }
 
     private SimulationSnapshot snapshot() {

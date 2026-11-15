@@ -3,6 +3,7 @@ package com.kernelx.exception;
 import com.kernelx.dto.ApiErrorResponse;
 import com.kernelx.persistence.PersistenceException;
 import com.kernelx.service.ConflictException;
+import com.kernelx.service.ComparisonExecutionException;
 import com.kernelx.service.ResourceNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Instant;
@@ -61,6 +62,13 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiErrorResponse> storageFailure(PersistenceException exception, HttpServletRequest request) {
         LOGGER.error("KernelX JSON persistence failed", exception);
         return error(HttpStatus.INTERNAL_SERVER_ERROR, "Persistent storage operation failed", request);
+    }
+
+    @ExceptionHandler(ComparisonExecutionException.class)
+    public ResponseEntity<ApiErrorResponse> comparisonFailure(ComparisonExecutionException exception,
+                                                              HttpServletRequest request) {
+        LOGGER.error("Isolated workload comparison failed", exception);
+        return error(HttpStatus.INTERNAL_SERVER_ERROR, exception.getMessage(), request);
     }
 
     @ExceptionHandler(Exception.class)

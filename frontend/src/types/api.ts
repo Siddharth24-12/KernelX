@@ -36,4 +36,77 @@ export interface HeapTraceStep {
 }
 export interface HeapRunSummary { runId: string; algorithm: Algorithm; preemptive: boolean; processCount: number; startedAt: string; completedAt: string | null; operationCount: number; truncated: boolean }
 export interface HeapRunTrace extends HeapRunSummary { finalHeap: HeapSlotSnapshot[]; steps: HeapTraceStep[] }
+export interface PmuNodeSnapshot {
+  nodeId: number; pid: number; name: string; state: ProcessState; priority: number
+  arrivalTime: number; burstTime: number; remainingTime: number; memoryRequirement: number
+  parentPid: number; completionTime: number; waitingTime: number; turnaroundTime: number
+  responseTime: number; nextNodeId: number | null
+}
+export interface PmuListSnapshot {
+  listId: string; headNodeId: number | null; tailNodeId: number | null
+  size: number; nodes: PmuNodeSnapshot[]; truncated: boolean
+}
+export type PmuStepKind = 'NODE_VISIT' | 'SEARCH_COMPARE' | 'NODE_CREATE' | 'POINTER_UPDATE' | 'HEAD_UPDATE' | 'TAIL_UPDATE' | 'INSERT' | 'DELETE' | 'OPERATION_COMPLETE'
+export interface PmuTraceStep {
+  sequence: number; kind: PmuStepKind; pid: number | null; nodeId: number | null; position: number | null
+  ownerNodeId: number | null; oldNextNodeId: number | null; newNextNodeId: number | null
+  oldHeadNodeId: number | null; newHeadNodeId: number | null
+  oldTailNodeId: number | null; newTailNodeId: number | null
+  result: boolean | null; node: PmuNodeSnapshot | null; description: string
+}
+export interface PmuTraceSummary {
+  traceId: string; listId: string; operation: 'INSERT' | 'TRAVERSE' | 'SEARCH' | 'DELETE'
+  targetPid: number | null; simulationTime: number | null; recordedAt: string
+  stepCount: number; result: boolean | null; truncated: boolean; description: string | null
+}
+export interface PmuTrace extends PmuTraceSummary {
+  beforeSnapshot: PmuListSnapshot; afterSnapshot: PmuListSnapshot; steps: PmuTraceStep[]
+}
+export interface AluEntrySnapshot {
+  entryId: number; pid: number; name: string; state: ProcessState; priority: number; arrivalTime: number
+  burstTime: number; remainingTime: number; memoryRequirement: number; parentPid: number; completionTime: number
+  waitingTime: number; turnaroundTime: number; responseTime: number; nextEntryId: number | null
+}
+export interface AluBucketSnapshot { index: number; chainLength: number; entries: AluEntrySnapshot[]; truncated: boolean }
+export interface AluTableSnapshot { tableId: string; capacity: number; size: number; loadFactor: number; buckets: AluBucketSnapshot[]; truncated: boolean }
+export type AluStepKind = 'NODE_VISITED' | 'KEY_COMPARED' | 'COLLISION' | 'NODE_CREATED' | 'BUCKET_HEAD_UPDATED' | 'NEXT_POINTER_UPDATED' | 'VALUE_REPLACED' | 'ENTRY_REMOVED' | 'RESIZE_STARTED' | 'ENTRY_REHASHED' | 'RESIZE_COMPLETED' | 'OPERATION_COMPLETED'
+export interface AluTraceStep {
+  sequence: number; kind: AluStepKind; pid: number | null; entryId: number | null; bucketIndex: number | null
+  oldBucketIndex: number | null; newBucketIndex: number | null; chainPosition: number | null; collisionChainLength: number | null
+  spreadHash: number | null; oldCapacity: number | null; newCapacity: number | null; ownerEntryId: number | null
+  oldNextEntryId: number | null; newNextEntryId: number | null; oldBucketHeadEntryId: number | null
+  newBucketHeadEntryId: number | null; result: boolean | null; entry: AluEntrySnapshot | null; description: string
+}
+export interface AluTraceSummary {
+  traceId: string; tableId: string; operation: 'PUT' | 'GET' | 'REMOVE'; pid: number; spreadHash: number
+  bucketIndex: number; simulationTime: number | null; recordedAt: string; stepCount: number
+  result: boolean | null; truncated: boolean; description: string
+}
+export interface AluTrace extends AluTraceSummary {
+  beforeSnapshot: AluTableSnapshot | null; afterSnapshot: AluTableSnapshot | null
+  bucketBefore: AluBucketSnapshot | null; bucketAfter: AluBucketSnapshot | null; steps: AluTraceStep[]
+}
+export interface FpbProcessSnapshot { pid: number; name: string; priority: number; arrivalTime: number; burstTime: number; remainingTime: number }
+export interface FpbQueueNodeSnapshot { nodeId: number; process: FpbProcessSnapshot; nextNodeId: number | null }
+export interface FpbQueueSnapshot { queueId: string; size: number; frontNodeId: number | null; rearNodeId: number | null; nodes: FpbQueueNodeSnapshot[]; truncated: boolean }
+export interface FpbLiveSnapshot { active: boolean; queue: FpbQueueSnapshot | null; message: string }
+export type FpbOperation = 'ENQUEUE' | 'DEQUEUE'
+export interface FpbTraceStep {
+  sequence: number; operation: FpbOperation; pid: number; sizeBefore: number; sizeAfter: number
+  oldFrontNodeId: number | null; newFrontNodeId: number | null; oldRearNodeId: number | null; newRearNodeId: number | null
+  process: FpbProcessSnapshot; queueAfter: FpbQueueSnapshot; description: string
+}
+export interface FpbTraceSummary {
+  traceId: string; schedulingRunId: string; queueId: string; algorithm: 'FCFS' | 'ROUND_ROBIN'
+  processCount: number; operationCount: number; startedAt: string; completedAt: string | null
+  complete: boolean; truncated: boolean
+}
+export interface FpbTrace extends FpbTraceSummary {
+  initialQueue: FpbQueueSnapshot; finalQueue: FpbQueueSnapshot; steps: FpbTraceStep[]
+}
+export interface PtuNodeSnapshot { nodeId: number; pid: number; name: string; state: ProcessState | string; parentPid: number; firstChildPid: number | null; nextSiblingPid: number | null }
+export interface PtuSnapshot { size: number; rootCount: number; rootPids: number[]; nodes: PtuNodeSnapshot[]; truncated: boolean }
+export interface PtuTraceStep { sequence: number; operation: string; currentPid: number | null; parentPid: number | null; firstChildBefore: number | null; firstChildAfter: number | null; nextSiblingBefore: number | null; nextSiblingAfter: number | null; visitedPid: number | null; pointerChange: string | null; pointerBeforePid: number | null; pointerAfterPid: number | null; description: string }
+export interface PtuTraceSummary { traceId: string; operation: string; targetPid: number | null; recordedAt: string; stepCount: number; truncated: boolean }
+export interface PtuTrace extends PtuTraceSummary { finalTree: PtuNodeSnapshot[]; steps: PtuTraceStep[] }
 export interface ApiError { timestamp: string; status: number; error: string; message: string; path: string }

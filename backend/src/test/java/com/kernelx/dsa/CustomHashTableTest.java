@@ -33,4 +33,34 @@ class CustomHashTableTest {
         assertThrows(NullPointerException.class, () -> table.put(null, "x"));
         assertThrows(NullPointerException.class, () -> table.put(1, null));
     }
+
+    @Test void diagnosticSnapshotsExposeActualChainsWithoutCallingObserverAndResizeRecordsRehashes() {
+        java.util.List<String> operations = new java.util.ArrayList<>();
+        CustomHashTable.Observer<Integer, String> observer = new CustomHashTable.Observer<>() {
+            @Override public CustomHashTable.Operation<Integer, String> begin(String tableId, String kind, Integer key,
+                    int hash, int bucket, int capacity, CustomHashTable.BucketSnapshot<Integer, String> before,
+                    CustomHashTable.Snapshot<Integer, String> tableBefore) {
+                operations.add(kind + ":" + key);
+                return new CustomHashTable.Operation<>() {
+                    @Override public void collision(int index, int length, int position, int spreadHash) { operations.add("COLLISION:" + index + ":" + length); }
+                    @Override public void resizeStarted(int oldCapacity, int newCapacity, int size) { operations.add("RESIZE:" + oldCapacity + ":" + newCapacity); }
+                    @Override public void rehashed(CustomHashTable.EntrySnapshot<Integer, String> entry, int oldIndex, int newIndex,
+                            Long oldNext, Long newNext, Long oldHead, Long newHead) { operations.add("REHASH:" + entry.key() + ":" + oldIndex + ":" + newIndex); }
+                };
+            }
+        };
+        CustomHashTable<Integer, String> table = new CustomHashTable<>(observer);
+        table.put(1, "one"); table.put(17, "seventeen");
+        var live = table.snapshot(); int tracesBefore = operations.size();
+        assertEquals(16, live.capacity());
+        assertEquals(java.util.List.of(17, 1), live.buckets().get(1).entries().stream().map(CustomHashTable.EntrySnapshot::key).toList());
+        for (int i = 0; i < 5; i++) assertEquals(live, table.snapshot());
+        assertEquals(tracesBefore, operations.size(), "snapshot must not invoke operation instrumentation");
+        for (int i = 0; i < 11; i++) table.put(100 + i, "v" + i);
+        assertEquals(32, table.capacity());
+        assertTrue(operations.contains("RESIZE:16:32"));
+        assertTrue(operations.stream().anyMatch(value -> value.startsWith("REHASH:")));
+        assertEquals(13, table.size());
+        for (int i = 0; i < 11; i++) assertEquals("v" + i, table.get(100 + i));
+    }
 }

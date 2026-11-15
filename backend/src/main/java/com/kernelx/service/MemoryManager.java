@@ -48,7 +48,11 @@ public final class MemoryManager {
                 candidate = block;
             }
         }
-        if (candidate == null) return false;
+        if (candidate == null) {
+            events.record(pid, SystemEventType.MEMORY_ALLOCATION_FAILED,
+                    "Could not allocate " + amount + " memory units using " + strategy + ": no contiguous free block was large enough");
+            return false;
+        }
 
         if (candidate.size > amount) {
             Block remainder = new Block(candidate.start + amount, candidate.size - amount, null);

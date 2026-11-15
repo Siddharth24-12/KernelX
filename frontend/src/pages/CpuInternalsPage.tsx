@@ -2,16 +2,114 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowLeft, ArrowRight, Camera, Cpu, Pause, Play, RefreshCw, RotateCcw } from 'lucide-react'
 import { heapTracesApi } from '../api/heapTraces'
+import { pmuApi } from '../api/pmu'
+import { aluApi } from '../api/alu'
+import { fpbApi } from '../api/fpb'
+import { ptuApi } from '../api/ptu'
 import { errorMessage } from '../api/client'
 import { Button, Empty, ErrorBanner, Loading, PageIntro } from '../components/common'
 import { ProcessorDieScene } from '../components/internals/ProcessorDieScene'
+import { PmuWorkbench } from '../components/internals/PmuWorkbench'
+import { AluWorkbench } from '../components/internals/AluWorkbench'
+import { FpbWorkbench, fpbQueueAtStep } from '../components/internals/FpbWorkbench'
+import { PtuWorkbench } from '../components/internals/PtuWorkbench'
 import { heapOperationLabel, projectRecordedHeap } from './cpuInternalsReplay'
-import type { HeapRunSummary, HeapRunTrace } from '../types/api'
+import { projectPmuTrace } from './pmuReplay'
+import type { HeapRunSummary, HeapRunTrace, PmuListSnapshot, PmuTrace, PmuTraceSummary } from '../types/api'
+import type { AluTableSnapshot, AluTrace, AluTraceSummary } from '../types/api'
+import type { FpbLiveSnapshot, FpbTrace, FpbTraceSummary } from '../types/api'
+import type { PtuSnapshot, PtuTrace, PtuTraceSummary } from '../types/api'
 
 export function CpuInternalsPage() {
   const [runs, setRuns] = useState<HeapRunSummary[]>([]); const [runId, setRunId] = useState(''); const [trace, setTrace] = useState<HeapRunTrace | null>(null)
   const [stepIndex, setStepIndex] = useState(-1); const [focused, setFocused] = useState(false); const [resetKey, setResetKey] = useState(0)
   const [loading, setLoading] = useState(true); const [traceLoading, setTraceLoading] = useState(false); const [playing, setPlaying] = useState(false); const [error, setError] = useState('')
+  const [pmuSnapshot, setPmuSnapshot] = useState<PmuListSnapshot | null>(null); const [pmuTraces, setPmuTraces] = useState<PmuTraceSummary[]>([])
+  const [pmuTrace, setPmuTrace] = useState<PmuTrace | null>(null); const [pmuTraceId, setPmuTraceId] = useState(''); const [pmuStep, setPmuStep] = useState(-1)
+  const [pmuMode, setPmuMode] = useState<'LIVE' | 'HISTORICAL'>('LIVE'); const [pmuPlaying, setPmuPlaying] = useState(false)
+  const [pmuLoading, setPmuLoading] = useState(true); const [pmuTraceLoading, setPmuTraceLoading] = useState(false); const [pmuError, setPmuError] = useState('')
+  const [aluSnapshot, setAluSnapshot] = useState<AluTableSnapshot | null>(null); const [aluTraces, setAluTraces] = useState<AluTraceSummary[]>([])
+  const [aluTrace, setAluTrace] = useState<AluTrace | null>(null); const [aluTraceId, setAluTraceId] = useState(''); const [aluStep, setAluStep] = useState(-1)
+  const [aluBucket, setAluBucket] = useState<number | null>(null); const [aluPlaying, setAluPlaying] = useState(false)
+  const [aluLoading, setAluLoading] = useState(true); const [aluTraceLoading, setAluTraceLoading] = useState(false); const [aluError, setAluError] = useState('')
+  const [fpbLive, setFpbLive] = useState<FpbLiveSnapshot | null>(null); const [fpbTraces, setFpbTraces] = useState<FpbTraceSummary[]>([])
+  const [fpbTrace, setFpbTrace] = useState<FpbTrace | null>(null); const [fpbTraceId, setFpbTraceId] = useState(''); const [fpbStep, setFpbStep] = useState(-1)
+  const [fpbPlaying, setFpbPlaying] = useState(false); const [fpbLoading, setFpbLoading] = useState(true); const [fpbTraceLoading, setFpbTraceLoading] = useState(false); const [fpbError, setFpbError] = useState('')
+  const [ptuSnapshot, setPtuSnapshot] = useState<PtuSnapshot | null>(null); const [ptuTraces, setPtuTraces] = useState<PtuTraceSummary[]>([])
+  const [ptuTrace, setPtuTrace] = useState<PtuTrace | null>(null); const [ptuTraceId, setPtuTraceId] = useState(''); const [ptuStep, setPtuStep] = useState(-1)
+  const [ptuLoading, setPtuLoading] = useState(true); const [ptuTraceLoading, setPtuTraceLoading] = useState(false); const [ptuError, setPtuError] = useState('')
+  const [focusTarget, setFocusTarget] = useState<'PDU' | 'PMU' | 'ALU' | 'FPB' | 'PTU'>('PDU')
+  const loadAlu = useCallback(async () => {
+    setAluError('')
+    try { const [snapshot, traces] = await Promise.all([aluApi.snapshot(), aluApi.traces()]); setAluSnapshot(snapshot); setAluTraces(traces) }
+    catch (cause) { setAluError(errorMessage(cause)) }
+    finally { setAluLoading(false) }
+  }, [])
+  useEffect(() => { void loadAlu(); const timer = window.setInterval(() => void loadAlu(), 4000); return () => window.clearInterval(timer) }, [loadAlu])
+  useEffect(() => {
+    if (!aluTraceId) return
+    let cancelled = false; setAluTraceLoading(true); setAluPlaying(false)
+    aluApi.trace(aluTraceId).then((value) => { if (!cancelled) { setAluTrace(value); setAluStep(-1) } })
+      .catch((cause) => { if (!cancelled) setAluError(errorMessage(cause)) }).finally(() => { if (!cancelled) setAluTraceLoading(false) })
+    return () => { cancelled = true }
+  }, [aluTraceId])
+  useEffect(() => {
+    if (!aluPlaying || !aluTrace) return
+    const timer = window.setInterval(() => setAluStep((index) => { if (index >= aluTrace.steps.length - 1) { setAluPlaying(false); return index } return index + 1 }), 680)
+    return () => window.clearInterval(timer)
+  }, [aluPlaying, aluTrace])
+  const loadFpb = useCallback(async () => {
+    setFpbError('')
+    try { const [snapshot, traces] = await Promise.all([fpbApi.snapshot(), fpbApi.traces()]); setFpbLive(snapshot); setFpbTraces(traces) }
+    catch (cause) { setFpbError(errorMessage(cause)) }
+    finally { setFpbLoading(false) }
+  }, [])
+  const loadPtu = useCallback(async () => {
+    setPtuError('')
+    try { const [snapshot, traces] = await Promise.all([ptuApi.snapshot(), ptuApi.traces()]); setPtuSnapshot(snapshot); setPtuTraces(traces) }
+    catch (cause) { setPtuError(errorMessage(cause)) }
+    finally { setPtuLoading(false) }
+  }, [])
+  useEffect(() => { void loadPtu(); const timer = window.setInterval(() => void loadPtu(), 4000); return () => window.clearInterval(timer) }, [loadPtu])
+  useEffect(() => {
+    if (!ptuTraceId) return
+    let cancelled = false; setPtuTraceLoading(true)
+    ptuApi.trace(ptuTraceId).then((value) => { if (!cancelled) { setPtuTrace(value); setPtuStep(-1) } })
+      .catch((cause) => { if (!cancelled) setPtuError(errorMessage(cause)) }).finally(() => { if (!cancelled) setPtuTraceLoading(false) })
+    return () => { cancelled = true }
+  }, [ptuTraceId])
+  useEffect(() => { void loadFpb(); const timer = window.setInterval(() => void loadFpb(), 4000); return () => window.clearInterval(timer) }, [loadFpb])
+  useEffect(() => {
+    if (!fpbTraceId) return
+    let cancelled = false; setFpbTraceLoading(true); setFpbPlaying(false)
+    fpbApi.trace(fpbTraceId).then((value) => { if (!cancelled) { setFpbTrace(value); setFpbStep(-1) } })
+      .catch((cause) => { if (!cancelled) setFpbError(errorMessage(cause)) }).finally(() => { if (!cancelled) setFpbTraceLoading(false) })
+    return () => { cancelled = true }
+  }, [fpbTraceId])
+  useEffect(() => {
+    if (!fpbPlaying || !fpbTrace) return
+    const timer = window.setInterval(() => setFpbStep((index) => { if (index >= fpbTrace.steps.length - 1) { setFpbPlaying(false); return index } return index + 1 }), 760)
+    return () => window.clearInterval(timer)
+  }, [fpbPlaying, fpbTrace])
+  const loadPmu = useCallback(async () => {
+    setPmuError('')
+    try { const [snapshot, traces] = await Promise.all([pmuApi.snapshot(), pmuApi.traces()]); setPmuSnapshot(snapshot); setPmuTraces(traces) }
+    catch (cause) { setPmuError(errorMessage(cause)) }
+    finally { setPmuLoading(false) }
+  }, [])
+  useEffect(() => { void loadPmu(); const timer = window.setInterval(() => void loadPmu(), 4000); return () => window.clearInterval(timer) }, [loadPmu])
+  useEffect(() => {
+    if (!pmuTraceId) return
+    let cancelled = false; setPmuTraceLoading(true); setPmuPlaying(false)
+    pmuApi.trace(pmuTraceId).then((value) => { if (!cancelled) { setPmuTrace(value); setPmuStep(-1); setPmuMode('HISTORICAL') } })
+      .catch((cause) => { if (!cancelled) setPmuError(errorMessage(cause)) }).finally(() => { if (!cancelled) setPmuTraceLoading(false) })
+    return () => { cancelled = true }
+  }, [pmuTraceId])
+  useEffect(() => {
+    if (!pmuPlaying || !pmuTrace) return
+    const timer = window.setInterval(() => setPmuStep((index) => { if (index >= pmuTrace.steps.length - 1) { setPmuPlaying(false); return index } return index + 1 }), 680)
+    return () => window.clearInterval(timer)
+  }, [pmuPlaying, pmuTrace])
   const loadRuns = useCallback(async () => {
     setError('')
     try {
@@ -46,7 +144,21 @@ export function CpuInternalsPage() {
   const resetCamera = () => setResetKey((key) => key + 1)
   const goToStep = (index: number) => { setPlaying(false); setStepIndex(Math.max(-1, Math.min(trace?.steps.length ?? 0, index))) }
   const operationTitle = heapOperationLabel(current)
-  const openFocused = () => setFocused(true)
+  const pmuProjection = useMemo(() => pmuTrace ? projectPmuTrace(pmuTrace, pmuStep) : null, [pmuTrace, pmuStep])
+  const openFocused = () => { setFocusTarget('PDU'); setFocused(true) }
+  const focusPmu = () => { setFocusTarget('PMU'); setFocused(true) }
+  const focusAlu = () => { setFocusTarget('ALU'); setFocused(true) }
+  const focusFpb = () => { setFocusTarget('FPB'); setFocused(true) }
+  const focusPtu = () => { setFocusTarget('PTU'); setFocused(true) }
+  const stepPtu = (index: number) => setPtuStep(Math.max(-1, Math.min(ptuTrace?.steps.length ?? 0, index)))
+  const selectPtuTrace = (id: string) => { setPtuTraceId(id); setPtuTrace(null); setPtuError('') }
+  const stepPmu = (index: number) => { setPmuPlaying(false); setPmuStep(Math.max(-1, Math.min(pmuTrace?.steps.length ?? 0, index))) }
+  const selectPmuTrace = (id: string) => { setPmuTraceId(id); setPmuTrace(null); setPmuError('') }
+  const selectAluTrace = (id: string) => { setAluTraceId(id); setAluTrace(null); setAluError('') }
+  const stepAlu = (index: number) => { setAluPlaying(false); setAluStep(Math.max(-1, Math.min(aluTrace?.steps.length ?? 0, index))) }
+  const selectFpbTrace = (id: string) => { setFpbTraceId(id); setFpbTrace(null); setFpbError('') }
+  const stepFpb = (index: number) => { setFpbPlaying(false); setFpbStep(Math.max(-1, Math.min(fpbTrace?.steps.length ?? 0, index))) }
+  const fpbQueue = fpbTrace ? fpbQueueAtStep(fpbTrace, fpbStep) : null
 
   return <div className="cpu-internals-page">
     <PageIntro eyebrow="DSA LAB / PROCESSOR EXPLORER" title="CPU INTERNALS" description="Explore KernelX’s scheduler structures inside an exposed processor die. Heap playback is a historical record of real Java operations." action={<div className="internals-intro-actions"><span className="internals-mode"><i /> RECORDED RUN REPLAY</span><Link className="button button-quiet" to="/scheduler"><Cpu size={15} /> Open CPU Scheduler</Link></div>} />
@@ -55,8 +167,11 @@ export function CpuInternalsPage() {
 
     <div className={`internals-workspace ${focused ? 'internals-focused' : ''}`}>
       <section className="processor-stage" aria-label="Interactive CPU die">
-        <div className="processor-stage-top"><div><span className="chip-serial">KERNELX · SILICON ARCHITECTURE EXPLORER</span><b>{focused ? 'PRIORITY DISPATCH UNIT' : 'PROCESSOR DIE / SYSTEM INTERCONNECT'}</b></div><div className="camera-controls">{focused && <Button variant="quiet" onClick={() => setFocused(false)}><ArrowLeft size={14} /> Back to Processor</Button>}<Button variant="quiet" onClick={resetCamera} aria-label="Reset camera"><Camera size={14} /> Reset camera</Button></div></div>
-        <div className="die-canvas"><ProcessorDieScene focused={focused} resetKey={resetKey} entries={heap} active={current} onFocus={openFocused} /><div className="die-hint">DRAG · ORBIT &nbsp; / &nbsp; SCROLL · ZOOM &nbsp; / &nbsp; RIGHT DRAG · PAN</div></div>
+        <div className="processor-stage-top"><div><span className="chip-serial">KERNELX · SILICON ARCHITECTURE EXPLORER</span><b>{focused ? focusTarget === 'PMU' ? 'PCB MEMORY UNIT' : focusTarget === 'ALU' ? 'ASSOCIATIVE LOOKUP UNIT' : focusTarget === 'FPB' ? 'FIFO PROCESS BUFFER' : focusTarget === 'PTU' ? 'PROCESS TREE UNIT' : 'PRIORITY DISPATCH UNIT' : 'PROCESSOR DIE / SYSTEM INTERCONNECT'}</b></div><div className="camera-controls">{focused && <Button variant="quiet" onClick={() => setFocused(false)}><ArrowLeft size={14} /> Back to Processor</Button>}<Button variant="quiet" onClick={resetCamera} aria-label="Reset camera"><Camera size={14} /> Reset camera</Button></div></div>
+        <div className="die-canvas"><ProcessorDieScene focused={focused} focusTarget={focusTarget} resetKey={resetKey} entries={heap} active={current} onFocus={openFocused} onPmuFocus={focusPmu} onAluFocus={focusAlu} onFpbFocus={focusFpb} onPtuFocus={focusPtu} ptuSnapshot={ptuSnapshot} ptuActive={ptuTrace && ptuStep >= 0 ? ptuTrace.steps[ptuStep] ?? null : null} aluSnapshot={aluSnapshot} aluActive={aluTrace && aluStep >= 0 ? aluTrace.steps[aluStep] ?? null : null} fpbQueue={fpbQueue} fpbAlgorithm={fpbTrace?.algorithm ?? null} fpbActive={fpbTrace && fpbStep >= 0 ? fpbTrace.steps[fpbStep] ?? null : null}
+          pmuSnapshot={pmuMode === 'HISTORICAL' && pmuProjection ? pmuProjection.snapshot : pmuSnapshot} pmuBeforeSnapshot={pmuTrace?.beforeSnapshot ?? null}
+          pmuActive={pmuProjection?.active ?? null} pmuVisitedNodeIds={pmuProjection?.visitedNodeIds ?? []} pmuIncomingNodeId={pmuProjection?.incomingNodeId ?? null} pmuHistorical={pmuMode === 'HISTORICAL'} />
+          <div className="die-hint">DRAG · ORBIT &nbsp; / &nbsp; SCROLL · ZOOM &nbsp; / &nbsp; RIGHT DRAG · PAN</div></div>
         {!focused && <button className="focus-hotspot" onClick={openFocused}><span>01 / PRIORITY DISPATCH UNIT</span><b>Focus module <ArrowRight size={14} /></b></button>}
       </section>
       <aside className="operation-inspector">
@@ -82,6 +197,15 @@ export function CpuInternalsPage() {
         </> : <Empty title="No recorded heap run" message="Start an SJF or Priority scheduling run in CPU Scheduler. Its actual heap operations will appear here after the backend finishes planning." />}
       </aside>
     </div>
+    <PmuWorkbench snapshot={pmuSnapshot} traces={pmuTraces} trace={pmuTrace} selectedTraceId={pmuTraceId} stepIndex={pmuStep} mode={pmuMode} playing={pmuPlaying}
+      loading={pmuLoading} traceLoading={pmuTraceLoading} error={pmuError} onRefresh={() => void loadPmu()} onSelectTrace={selectPmuTrace} onStep={stepPmu}
+      onModeChange={(mode) => { setPmuPlaying(false); setPmuMode(mode) }} onTogglePlay={() => { if (pmuTrace && pmuStep >= pmuTrace.steps.length - 1) setPmuStep(-1); setPmuPlaying((value) => !value) }} onFocus={focusPmu} onResetCamera={resetCamera} />
+    <AluWorkbench snapshot={aluSnapshot} traces={aluTraces} trace={aluTrace} selectedTraceId={aluTraceId} bucketIndex={aluBucket} stepIndex={aluStep} loading={aluLoading} traceLoading={aluTraceLoading} playing={aluPlaying} error={aluError}
+      onRefresh={() => void loadAlu()} onSelectTrace={selectAluTrace} onSelectBucket={setAluBucket} onStep={stepAlu} onTogglePlay={() => { if (aluTrace && aluStep >= aluTrace.steps.length - 1) setAluStep(-1); setAluPlaying((value) => !value) }} onFocus={focusAlu} />
+    <FpbWorkbench live={fpbLive} traces={fpbTraces} trace={fpbTrace} selectedTraceId={fpbTraceId} stepIndex={fpbStep} playing={fpbPlaying} loading={fpbLoading} traceLoading={fpbTraceLoading} error={fpbError}
+      onRefresh={() => void loadFpb()} onSelectTrace={selectFpbTrace} onStep={stepFpb} onTogglePlay={() => { if (fpbTrace && fpbStep >= fpbTrace.steps.length - 1) setFpbStep(-1); setFpbPlaying((value) => !value) }} onFocus={focusFpb} />
+    <PtuWorkbench snapshot={ptuSnapshot} traces={ptuTraces} trace={ptuTrace} selectedTraceId={ptuTraceId} stepIndex={ptuStep} loading={ptuLoading} traceLoading={ptuTraceLoading} error={ptuError}
+      onRefresh={() => void loadPtu()} onSelectTrace={selectPtuTrace} onStep={stepPtu} onFocus={focusPtu} />
     <div className="internals-footnote"><span>DIAGNOSTIC REPLAY · READ ONLY</span><span>Heap indices, comparisons and swaps are emitted by the Java implementation.</span></div>
   </div>
 }

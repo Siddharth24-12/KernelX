@@ -38,4 +38,50 @@ class ProcessLinkedListTest {
         assertThrows(IllegalArgumentException.class, () -> new ProcessControlBlock(2, "bad", 1, 0, 0, 1, -1));
         assertFalse(list.update(44, pcb -> pcb.setPriority(2)));
     }
+
+    @Test void snapshotPreservesStableLogicalNodesAndExactPointersWithoutInstrumentingReads() {
+        List<String> operations = new ArrayList<>();
+        ProcessLinkedList.Observer observer = new ProcessLinkedList.Observer() {
+            @Override public ProcessLinkedList.Operation begin(String kind, Integer pid, ProcessLinkedList.Snapshot before) {
+            operations.add(kind + ":begin");
+            return new ProcessLinkedList.Operation() {
+                @Override public void pointerUpdated(long owner, Long oldNext, Long newNext, int position) { operations.add("POINTER:" + owner + ":" + oldNext + ":" + newNext); }
+                @Override public void headUpdated(Long oldHead, Long newHead) { operations.add("HEAD:" + oldHead + ":" + newHead); }
+                @Override public void tailUpdated(Long oldTail, Long newTail) { operations.add("TAIL:" + oldTail + ":" + newTail); }
+                @Override public void completed(ProcessLinkedList.Snapshot after, boolean success, String description) { operations.add(kind + ":done"); }
+            };
+            }
+        };
+        ProcessLinkedList list = new ProcessLinkedList(observer);
+        assertEquals(0, list.snapshot().size());
+        list.insert(process(10)); list.insert(process(11));
+        ProcessLinkedList.Snapshot snapshot = list.snapshot();
+        assertEquals(2, snapshot.size());
+        assertEquals(snapshot.nodes().get(0).nodeId(), snapshot.headNodeId());
+        assertEquals(snapshot.nodes().get(1).nodeId(), snapshot.tailNodeId());
+        assertEquals(snapshot.nodes().get(1).nodeId(), snapshot.nodes().get(0).nextNodeId());
+        assertNull(snapshot.nodes().get(1).nextNodeId());
+        int operationCount = operations.size();
+        assertEquals(snapshot, list.snapshot());
+        assertEquals(operationCount, operations.size(), "diagnostic snapshots must not create operations");
+        list.remove(10);
+        assertTrue(operations.indexOf("POINTER:" + snapshot.headNodeId() + ":null:" + snapshot.nodes().get(1).nodeId()) >= 0);
+        assertEquals(snapshot.nodes().get(0).nodeId(), snapshot.headNodeId(), "old immutable snapshot remains historical");
+        assertEquals(List.of("SEARCH:begin", "SEARCH:done", "INSERT:begin", "HEAD:null:1", "TAIL:null:1", "INSERT:done"), operations.subList(0, 6));
+    }
+
+    @Test void snapshotsAndTraversalRemainCorrectForLargeLists() {
+        ProcessLinkedList list = new ProcessLinkedList();
+        for (int pid = 1; pid <= 1000; pid++) list.insert(process(pid));
+        ProcessLinkedList.Snapshot snapshot = list.snapshot();
+        assertEquals(1000, snapshot.size());
+        assertEquals(1, snapshot.nodes().get(0).pid());
+        assertEquals(1000, snapshot.nodes().get(999).pid());
+        assertEquals(snapshot.tailNodeId(), snapshot.nodes().get(999).nodeId());
+        assertNull(snapshot.nodes().get(999).nextNodeId());
+        List<Integer> pids = new ArrayList<>();
+        list.traverse(pcb -> pids.add(pcb.getPid()));
+        assertEquals(1000, pids.size());
+        assertEquals(1000, pids.get(999));
+    }
 }
