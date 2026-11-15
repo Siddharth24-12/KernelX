@@ -56,3 +56,7 @@ Base URL comes from `VITE_API_BASE_URL` (default `http://localhost:8081`). The f
 
 CPU Internals uses an interactive Three.js processor die with functional PDU, PMU, ALU, FPB and PTU units. Orbit, zoom, pan, focus and reset are client camera controls. DSA replay views use only backend snapshots and traces and are read-only. The PTU displays actual first-child/next-sibling links and explicitly keeps its final tree view static while replaying per-operation pointer events because per-step whole-tree snapshots are not recorded.
 
+## Phase 6E integration notes
+
+Saved workload load/execute endpoints revalidate persisted process and scheduler fields before touching the live runtime. Invalid stored definitions return a conflict response rather than partially loading a process set. Integration tests exercise these paths with temporary JSON data. The CPU Internals route defers loading the Three.js die until that scene is requested; playback data continues to come from the read-only backend snapshot and trace APIs. The automated frontend suite and production build do not substitute for manual WebGL/browser demo verification.
+

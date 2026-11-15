@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowLeft, ArrowRight, Camera, Cpu, Pause, Play, RefreshCw, RotateCcw } from 'lucide-react'
 import { heapTracesApi } from '../api/heapTraces'
@@ -8,7 +8,6 @@ import { fpbApi } from '../api/fpb'
 import { ptuApi } from '../api/ptu'
 import { errorMessage } from '../api/client'
 import { Button, Empty, ErrorBanner, Loading, PageIntro } from '../components/common'
-import { ProcessorDieScene } from '../components/internals/ProcessorDieScene'
 import { PmuWorkbench } from '../components/internals/PmuWorkbench'
 import { AluWorkbench } from '../components/internals/AluWorkbench'
 import { FpbWorkbench, fpbQueueAtStep } from '../components/internals/FpbWorkbench'
@@ -19,6 +18,8 @@ import type { HeapRunSummary, HeapRunTrace, PmuListSnapshot, PmuTrace, PmuTraceS
 import type { AluTableSnapshot, AluTrace, AluTraceSummary } from '../types/api'
 import type { FpbLiveSnapshot, FpbTrace, FpbTraceSummary } from '../types/api'
 import type { PtuSnapshot, PtuTrace, PtuTraceSummary } from '../types/api'
+
+const ProcessorDieScene = lazy(() => import('../components/internals/ProcessorDieScene').then((module) => ({ default: module.ProcessorDieScene })))
 
 export function CpuInternalsPage() {
   const [runs, setRuns] = useState<HeapRunSummary[]>([]); const [runId, setRunId] = useState(''); const [trace, setTrace] = useState<HeapRunTrace | null>(null)
@@ -168,9 +169,9 @@ export function CpuInternalsPage() {
     <div className={`internals-workspace ${focused ? 'internals-focused' : ''}`}>
       <section className="processor-stage" aria-label="Interactive CPU die">
         <div className="processor-stage-top"><div><span className="chip-serial">KERNELX · SILICON ARCHITECTURE EXPLORER</span><b>{focused ? focusTarget === 'PMU' ? 'PCB MEMORY UNIT' : focusTarget === 'ALU' ? 'ASSOCIATIVE LOOKUP UNIT' : focusTarget === 'FPB' ? 'FIFO PROCESS BUFFER' : focusTarget === 'PTU' ? 'PROCESS TREE UNIT' : 'PRIORITY DISPATCH UNIT' : 'PROCESSOR DIE / SYSTEM INTERCONNECT'}</b></div><div className="camera-controls">{focused && <Button variant="quiet" onClick={() => setFocused(false)}><ArrowLeft size={14} /> Back to Processor</Button>}<Button variant="quiet" onClick={resetCamera} aria-label="Reset camera"><Camera size={14} /> Reset camera</Button></div></div>
-        <div className="die-canvas"><ProcessorDieScene focused={focused} focusTarget={focusTarget} resetKey={resetKey} entries={heap} active={current} onFocus={openFocused} onPmuFocus={focusPmu} onAluFocus={focusAlu} onFpbFocus={focusFpb} onPtuFocus={focusPtu} ptuSnapshot={ptuSnapshot} ptuActive={ptuTrace && ptuStep >= 0 ? ptuTrace.steps[ptuStep] ?? null : null} aluSnapshot={aluSnapshot} aluActive={aluTrace && aluStep >= 0 ? aluTrace.steps[aluStep] ?? null : null} fpbQueue={fpbQueue} fpbAlgorithm={fpbTrace?.algorithm ?? null} fpbActive={fpbTrace && fpbStep >= 0 ? fpbTrace.steps[fpbStep] ?? null : null}
+        <div className="die-canvas"><Suspense fallback={<div className="die-scene-loading" role="status">Loading 3D processor view…</div>}><ProcessorDieScene focused={focused} focusTarget={focusTarget} resetKey={resetKey} entries={heap} active={current} onFocus={openFocused} onPmuFocus={focusPmu} onAluFocus={focusAlu} onFpbFocus={focusFpb} onPtuFocus={focusPtu} ptuSnapshot={ptuSnapshot} ptuActive={ptuTrace && ptuStep >= 0 ? ptuTrace.steps[ptuStep] ?? null : null} aluSnapshot={aluSnapshot} aluActive={aluTrace && aluStep >= 0 ? aluTrace.steps[aluStep] ?? null : null} fpbQueue={fpbQueue} fpbAlgorithm={fpbTrace?.algorithm ?? null} fpbActive={fpbTrace && fpbStep >= 0 ? fpbTrace.steps[fpbStep] ?? null : null}
           pmuSnapshot={pmuMode === 'HISTORICAL' && pmuProjection ? pmuProjection.snapshot : pmuSnapshot} pmuBeforeSnapshot={pmuTrace?.beforeSnapshot ?? null}
-          pmuActive={pmuProjection?.active ?? null} pmuVisitedNodeIds={pmuProjection?.visitedNodeIds ?? []} pmuIncomingNodeId={pmuProjection?.incomingNodeId ?? null} pmuHistorical={pmuMode === 'HISTORICAL'} />
+          pmuActive={pmuProjection?.active ?? null} pmuVisitedNodeIds={pmuProjection?.visitedNodeIds ?? []} pmuIncomingNodeId={pmuProjection?.incomingNodeId ?? null} pmuHistorical={pmuMode === 'HISTORICAL'} /></Suspense>
           <div className="die-hint">DRAG · ORBIT &nbsp; / &nbsp; SCROLL · ZOOM &nbsp; / &nbsp; RIGHT DRAG · PAN</div></div>
         {!focused && <button className="focus-hotspot" onClick={openFocused}><span>01 / PRIORITY DISPATCH UNIT</span><b>Focus module <ArrowRight size={14} /></b></button>}
       </section>

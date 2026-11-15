@@ -96,6 +96,18 @@ public final class WorkloadService {
         if (request == null) return new WorkloadValidationResponse(false, List.of("Request body is required"), List.of());
         List<WorkloadProcessDefinition> definitions = request.processes() == null ? List.of() : request.processes();
         if (definitions.isEmpty()) errors.add("Add at least one process");
+        if (definitions.size() > 256) errors.add("A workload cannot contain more than 256 processes");
+        if (request.name() == null || request.name().isBlank() || request.name().trim().length() > 80)
+            errors.add("Workload name is required and must not exceed 80 characters");
+        if (request.description() != null && request.description().length() > 500)
+            errors.add("Workload description must not exceed 500 characters");
+        if (request.algorithm() == null) errors.add("Choose a scheduling algorithm");
+        if (request.totalMemory() <= 0) errors.add("Total memory must be positive");
+        if (request.memoryAllocationStrategy() == null) errors.add("Choose a memory allocation strategy");
+        if (!Double.isFinite(request.speed()) || request.speed() < 0.1 || request.speed() > 10.0)
+            errors.add("Simulation speed must be between 0.1 and 10.0");
+        if (request.timeQuantum() < 0 || request.timeQuantum() > 100000)
+            errors.add("Time quantum must be between 0 and 100000");
         if (request.algorithm() == SchedulingAlgorithm.ROUND_ROBIN && request.timeQuantum() <= 0) {
             errors.add("Round Robin requires a positive time quantum");
         }
@@ -109,12 +121,28 @@ public final class WorkloadService {
             errors.add("Reset the simulation before running a workload");
         }
         for (WorkloadProcessDefinition process : definitions) {
+            if (process == null) continue;
             if (!pids.add(process.pid())) errors.add("PID " + process.pid() + " appears more than once");
             if (includeRuntimeConstraints && existingPids.contains(process.pid())) errors.add("PID " + process.pid() + " is already in the simulator");
         }
         Map<Integer, WorkloadProcessDefinition> byPid = new HashMap<>();
-        definitions.forEach(process -> byPid.putIfAbsent(process.pid(), process));
+        definitions.forEach(process -> {
+            if (process == null) {
+                errors.add("Workload contains an empty process definition");
+                return;
+            }
+            if (process.pid() <= 0) errors.add("Process PID must be positive");
+            if (process.name() == null || process.name().isBlank() || process.name().length() > 80)
+                errors.add("Process names must be non-empty and no longer than 80 characters");
+            if (process.priority() < 0 || process.priority() > 10) errors.add("Process priority must be between 0 and 10");
+            if (process.arrivalTime() < 0) errors.add("Process arrival time cannot be negative");
+            if (process.burstTime() <= 0) errors.add("Process burst time must be positive");
+            if (process.memoryRequirement() <= 0) errors.add("Process memory requirement must be positive");
+            if (process.parentPid() < -1) errors.add("Parent PID must be -1 or a positive process ID");
+            byPid.putIfAbsent(process.pid(), process);
+        });
         for (WorkloadProcessDefinition process : definitions) {
+            if (process == null) continue;
             int parentPid = process.parentPid() == null ? -1 : process.parentPid();
             if (parentPid != -1 && !byPid.containsKey(parentPid) && !existingPids.contains(parentPid)) {
                 errors.add("Parent PID " + parentPid + " for process " + process.pid() + " does not exist");
@@ -122,6 +150,7 @@ public final class WorkloadService {
             if (parentPid == process.pid()) errors.add("Process " + process.pid() + " cannot be its own parent");
         }
         for (WorkloadProcessDefinition process : definitions) {
+            if (process == null) continue;
             Set<Integer> visited = new HashSet<>();
             Integer current = process.pid();
             while (current != null && byPid.containsKey(current)) {
@@ -134,10 +163,11 @@ public final class WorkloadService {
             }
         }
         List<String> warnings = new ArrayList<>();
-        if (!definitions.isEmpty() && definitions.stream().noneMatch(process -> process.arrivalTime() == 0)) {
+        List<WorkloadProcessDefinition> validDefinitions = definitions.stream().filter(java.util.Objects::nonNull).toList();
+        if (!validDefinitions.isEmpty() && validDefinitions.stream().noneMatch(process -> process.arrivalTime() == 0)) {
             warnings.add("The CPU will remain idle until the first process arrival");
         }
-        if (definitions.stream().mapToLong(WorkloadProcessDefinition::memoryRequirement).sum() > request.totalMemory()) {
+        if (validDefinitions.stream().mapToLong(WorkloadProcessDefinition::memoryRequirement).sum() > request.totalMemory()) {
             warnings.add("Combined requested memory exceeds total memory; processes are not automatically allocated memory");
         }
         return new WorkloadValidationResponse(errors.isEmpty(), List.copyOf(errors), List.copyOf(warnings));

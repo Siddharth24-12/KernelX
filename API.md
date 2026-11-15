@@ -27,6 +27,12 @@ Errors share this shape and never return stack traces:
 | 409 | Invalid lifecycle action, active-session mutation, insufficient contiguous memory, or incomplete simulation save |
 | 500 | Persistence or unexpected server error; comparison execution failures include a safe message naming the failed configuration, while details remain in server logs |
 
+## Health API
+
+### `GET /api/health`
+
+Returns `{ "status": "UP", "application": "KernelX", "mode": "simulation backend foundation" }` when the Spring application is serving requests. This is an application health response, not a host CPU or memory measurement.
+
 ## Process APIs
 
 ### `POST /api/processes`
@@ -85,6 +91,8 @@ Resume a paused process into `READY`. Returns its PCB. Errors: `404` missing PID
 Process mutations are locked while an engine run is `RUNNING` or `PAUSED` so changes cannot invalidate its planned schedule. Reset before editing an active run.
 
 ## Workload Studio APIs
+
+Saved workload JSON is revalidated against the same semantic constraints when loaded or executed. Invalid persisted content returns `409 Conflict` before process creation begins; request validation errors continue to return `400`.
 
 Workloads are reusable process definitions plus scheduler and memory settings. Saved definitions use the configured JSON data directory in `workloads.json`; built-in templates are deterministic API-provided examples and are never written to disk. Workload execution uses the existing process manager and simulation engine.
 

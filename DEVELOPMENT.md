@@ -1,6 +1,6 @@
 # KernelX Development Guide
 
-## Current checkpoint: Phase 6C
+## Current checkpoint: Phase 6E
 
 **Phase 5F — Process Tree Visualization Unit.** The PTU observes actual operations inside the existing Java `ProcessTree` first-child/next-sibling forest. Its flat link snapshot and bounded operation traces are read-only on retrieval; 32 traces × 2,048 steps are held in memory and cleared on restart. UI replay highlights real pointer changes over each trace's final tree; intermediate full-tree snapshots are not recorded. See [PHASE5F_DESIGN.md](PHASE5F_DESIGN.md) and the prior 5A/5D/5E design notes.
 
@@ -36,7 +36,17 @@ The responsive `/analytics` workspace refreshes live analytics every 3.5 seconds
 
 Memory experiments use the workload snapshot's fixed total memory and require First Fit as baseline plus both Best Fit and Worst Fit variants. One validated ordered request list (up to 512 operations) is replayed in full in each new `MemoryManager`; allocation failures count per strategy, while a later deallocation for a PID that did not get allocated is recorded as a no-op. Memory operation event managers and scheduler trace recorders are isolated and are never connected to live event persistence or DSA diagnostics. External fragmentation is `100 × (1 − largestFreeBlock / freeMemory)` when free memory is positive and zero otherwise. Allocation count/failure, capacity, largest block and fragmentation are compared; scheduler metrics use the same definitions as Phase 6B. Signed change is `variant − baseline`; absolute difference is its magnitude; percent change is omitted when the baseline value is zero.
 
-`POST /api/experiments` executes and persists one complete experiment; `GET /api/experiments`, `GET /api/experiments/{id}`, and `DELETE /api/experiments/{id}` manage completed reports in separate atomic JSON storage (`experiments.json`). No report is appended if validation, baseline, variant execution or result construction fails. The `/experiments` page provides scheduling parameter editors, process overrides, ordered memory requests, report history and baseline comparisons. Backend tests use temporary JSON storage and verify deterministic results, allocation strategy replay, failure isolation, saved-workload immutability, unchanged active simulation state, events and DSA trace lists. Phase 6D verification: `mvn test` — **64 passed, 0 failed, 0 errors, 0 skipped**; `npm test` — **55 passed** across 13 files; `npm run typecheck`, `npm run build`, and root `git diff --check` passed. The production build retains the existing large CPU Internals chunk warning. Phase 6E has not started.
+`POST /api/experiments` executes and persists one complete experiment; `GET /api/experiments`, `GET /api/experiments/{id}`, and `DELETE /api/experiments/{id}` manage completed reports in separate atomic JSON storage (`experiments.json`). No report is appended if validation, baseline, variant execution or result construction fails. The `/experiments` page provides scheduling parameter editors, process overrides, ordered memory requests, report history and baseline comparisons. Backend tests use temporary JSON storage and verify deterministic results, allocation strategy replay, failure isolation, saved-workload immutability, unchanged active simulation state, events and DSA trace lists. Phase 6D verification baseline: `mvn test` — **64 passed, 0 failed, 0 errors, 0 skipped**; `npm test` — **55 passed** across 13 files; `npm run typecheck`, `npm run build`, and root `git diff --check` passed.
+
+## Phase 6E — Final Integration and Reliability Refinement
+
+The integration pass preserves the existing DSA structures, simulation algorithms, JSON persistence model and page designs. `WorkloadService` now validates saved workload content when loading or executing it, including null rows, PID and numeric bounds, scheduler settings, strings and collection limits. This closes the gap where saved JSON bypassed request Bean Validation and could fail after runtime mutation began. A regression test corrupts one persisted process definition and verifies load returns a conflict without partially adding processes or tree nodes.
+
+`Phase6EIntegrationTest` exercises a temporary-data API workflow through process lifecycle, workload save/load, parent-child tree state, allocation, actual SJF schedule and heap trace, snapshots and trace details for all instrumented units, run completion, archive save, comparisons, analytics, scheduling and memory experiments, report deletion/reload, reset behavior and retained event history. It asserts isolated comparison/experiment execution leaves the active runtime and existing trace lists unchanged. No project data directory is used by these tests.
+
+The CPU Internals page now lazy-loads its Three.js processor-die scene. This reduces the route's initial JS chunk from 959,791 bytes to 45,400 bytes; the approximately 915 KB scene remains a separate deferred chunk and still triggers Vite's large-chunk advisory. This is an import-level split; detailed browser/WebGL demo verification remains manual and is not claimed by this audit.
+
+Phase 6E verification on Java 21.0.13 / Maven 3.10.0: `mvn test` — **66 tests, 0 failures, 0 errors, 0 skipped**. Frontend: `npm test` — **55 tests passed across 13 files**; `npm run typecheck` passed; `npm run build` passed. The production chunks include a 45.40 KB CPU Internals route module and a deferred 914.89 KB processor-die module (242.09 KB gzip); Vite reports its >500 KB advisory for that module. The targeted CPU Internals suite passed **5/5** before full verification. Browser automation was not available in the current tool session, so WebGL rendering, route interaction and visual regressions were not browser-verified. `git diff --check` is recorded after documentation updates.
 
 ## Phase 3 implementation
 
@@ -46,6 +56,7 @@ Memory experiments use the workload snapshot's fixed total memory and require Fi
 - `backend/data/configurations.json`: named algorithm, quantum, priority-mode, memory, and speed settings.
 - `backend/data/event_logs.json`: structured persistent `SystemEvent` records.
 - `backend/data/comparisons.json`: completed Phase 6B reports with immutable workload snapshots and backend schedule results.
+- `backend/data/experiments.json`: completed Phase 6D scheduling and memory experiment reports.
 - Separate archive/configuration/event services use `JsonFileRepository<T>`; records are persistence DTOs and do not capture custom DSA internals.
 - Missing files/directories are created. Invalid JSON or wrong-root/null records are quarantined as `.corrupt-<uuid>.json`, then the active file is initialized to an empty array. Original corrupted bytes remain available.
 - Writes are synchronized per repository, written to a unique same-directory temporary file, flushed, then replaced atomically where supported (replacement move is the fallback).
@@ -209,7 +220,7 @@ The API integration tests use real Spring controllers, services, runtime, Jackso
 3. JSON persistence and REST API — complete.
 4. Frontend foundation and all eight pages — complete.
 5. CPU internals visualization — Phases 5A–5F complete.
-6. Workload Studio, Algorithm Comparison, System Analytics and Experimentation Lab — Phases 6A–6D complete; Phase 6E not started.
+6. Workload Studio, Algorithm Comparison, System Analytics, Experimentation Lab and final integration — Phases 6A–6E complete.
 7. Final documentation and demo workflow — deferred.
 
-Phases 4, 5A–5F and 6A–6D are complete. The FPB records only actual FCFS/Round Robin ready-queue operations. The PTU records actual operations in the live custom process forest. Both are bounded, in-memory diagnostic histories and do not persist across restart. Phase 6C analytics history is also bounded in memory; Phase 6D experiment reports use a separate JSON file. Phase 6E has not started.
+Phases 4, 5A–5F and 6A–6E are complete. The FPB records only actual FCFS/Round Robin ready-queue operations. The PTU records actual operations in the live custom process forest. Both are bounded, in-memory diagnostic histories and do not persist across restart. Phase 6C analytics history is also bounded in memory; Phase 6D experiment reports use a separate JSON file.

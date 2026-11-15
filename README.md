@@ -2,7 +2,7 @@
 
 KernelX is a DSA-centered operating system scheduling simulator. The backend now includes custom data structures, a deterministic simulation engine, JSON persistence, and REST APIs. It deliberately simulates CPU and memory; it does not report measurements from the host computer.
 
-> **Status:** Phases 1–4, CPU Internals Phases 5A–5F, and Phases 6A–6D are implemented. Phase 6E has not started.
+> **Status:** Phases 1–4, CPU Internals Phases 5A–5F, and Phases 6A–6E are implemented. Phase 6E completes integration and reliability refinement; browser-level demo verification remains a manual step.
 
 ## Features
 
@@ -50,6 +50,7 @@ backend/
 │   ├── configurations.json
 │   ├── workloads.json
 │   ├── comparisons.json
+│   ├── experiments.json
 │   └── event_logs.json
 ├── src/main/java/com/kernelx/
 │   ├── config/          # Spring beans, CORS
@@ -142,7 +143,9 @@ The API integration suite exercises process-tree, simulation, events, archive, A
 
 ## Verification
 
-`mvn test` passed on Java 21.0.13 / Maven 3.9.11: **55 tests, 0 failures, 0 errors, 0 skipped**. Coverage includes FIFO queue mutations and pointer states, FCFS/RR traces, bounded trace history, read-only FPB diagnostics, actual PID-table collisions/rehashing, PMU/PDU/PTU regression tests, workload CRUD/validation/execution, process-tree API relationships and lifecycle, scheduler/runtime behavior and temporary JSON persistence.
+Phase 6E adds cross-feature API workflow coverage across workload loading, runtime scheduling, DSA diagnostics, archive, analytics, comparisons, experiments and persistence isolation. Malformed saved workload definitions are rejected before any processes are loaded. The CPU Internals 3D scene is dynamically imported, reducing the initial CPU Internals route chunk from about 960 KB to about 45 KB; the 3D scene itself remains a separate lazy-loaded chunk.
+
+Phase 6E verification: `mvn test` — **66 passed, 0 failed, 0 errors, 0 skipped**; `npm test` — **55 passed across 13 files**; `npm run typecheck` and `npm run build` passed. The production build warns that the deferred Three.js scene chunk is over 500 KB. Browser-level verification was not performed; automated tests do not cover WebGL rendering. See [DEVELOPMENT.md](DEVELOPMENT.md) for detailed test coverage and limitations.
 
 Frontend tests: **39 passed**; `npm run typecheck` and `npm run build` pass. The build reports the existing large CPU Internals bundle warning from Three.js. Coverage includes Workload Studio editing, validation/load/run flow, empty/error states and navigation alongside FPB, ALU, PTU, process tree, event filtering, archive, settings and scheduler behavior.
 
@@ -168,10 +171,9 @@ See [API.md](API.md#workload-studio-apis) for request formats and route behavior
 3. JSON persistence and REST API — complete.
 4. Frontend foundation, core pages and remaining frontend functionality — complete.
 5. CPU internals visualization — Phases 5A–5F complete.
-6. Workload Studio, Algorithm Comparison and System Analytics — Phases 6A–6C complete; Phase 6D not started.
-7. Final documentation and demo workflow — not started.
+6. Workload Studio, Algorithm Comparison, System Analytics, Experimentation Lab and final integration — Phases 6A–6E complete.
 
-Phase 4 and CPU Internals Phases 5B–5F are complete. CPU Internals includes the PDU, PMU, ALU, FIFO Process Buffer and PTU; the PTU reads the real process forest and bounded in-memory operation history. See [PHASE5A_DESIGN.md](PHASE5A_DESIGN.md), [PHASE5D_DESIGN.md](PHASE5D_DESIGN.md), [PHASE5E_DESIGN.md](PHASE5E_DESIGN.md), and [PHASE5F_DESIGN.md](PHASE5F_DESIGN.md).
+Phase 4 and CPU Internals Phases 5A–5F are complete. CPU Internals includes the PDU, PMU, ALU, FIFO Process Buffer and PTU; the PTU reads the real process forest and bounded in-memory operation history. See [PHASE5A_DESIGN.md](PHASE5A_DESIGN.md), [PHASE5D_DESIGN.md](PHASE5D_DESIGN.md), [PHASE5E_DESIGN.md](PHASE5E_DESIGN.md), and [PHASE5F_DESIGN.md](PHASE5F_DESIGN.md). Phase 6E hardens workload loading, expands cross-feature integration checks and reduces the initial CPU Internals bundle size.
 
 ## Frontend (Phase 4)
 
