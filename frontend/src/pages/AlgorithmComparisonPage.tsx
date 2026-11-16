@@ -123,7 +123,7 @@ function MetricBars({ metric, title, results, direction }: { metric: string; tit
 
 function GanttRow({ result, scale }: { result: ComparisonResult; scale: number }) {
   return <div className="comparison-gantt-row"><div className="comparison-gantt-label"><b>{result.label}</b><small>0 — {scale}</small></div><div className="comparison-gantt-track" role="img" aria-label={`Gantt chart for ${result.label}`}>
-    {result.gantt.map((segment, index) => <div key={`${segment.startTime}-${index}`} className={`comparison-gantt-segment ${segment.idle ? 'idle' : index % 2 ? 'alternate' : ''}`} style={{ left: `${segment.startTime / scale * 100}%`, width: `${segment.duration / scale * 100}%` }} title={`${segment.idle ? 'CPU idle' : `${segment.processName} (PID ${segment.pid})`}: ${segment.startTime}–${segment.endTime}`}><span>{segment.idle ? 'IDLE' : `P${segment.pid}`}</span></div>)}
+    {result.gantt.map((segment, index) => { const detail = `${segment.idle ? 'CPU idle' : `${segment.processName} (PID ${segment.pid})`}: ${segment.startTime}–${segment.endTime}`; return <div key={`${segment.startTime}-${index}`} className={`comparison-gantt-segment ${segment.idle ? 'idle' : index % 2 ? 'alternate' : ''}`} style={{ left: `${segment.startTime / scale * 100}%`, width: `${segment.duration / scale * 100}%` }} aria-label={detail} tabIndex={0}><span className="gantt-segment-label">{segment.idle ? 'IDLE' : `P${segment.pid}`}</span><span className="chart-hover-tooltip" aria-hidden="true">{detail}</span></div> })}
     </div></div>
 }
 

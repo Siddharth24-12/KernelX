@@ -81,9 +81,21 @@ describe('Phase 4.2 pages and navigation', () => {
     expect(JSON.parse(localStorage.getItem('kernelx.defaultSchedulerConfig') ?? '{}').algorithm).toBe('SJF')
     expect(screen.getByText('Saved in this browser')).toBeInTheDocument()
   })
-  it('exposes all eight working navigation routes', async () => {
+  it('exposes every command-deck route with its destination and section', async () => {
     render(<MemoryRouter initialEntries={['/overview']}><App /></MemoryRouter>)
-    for (const label of ['Overview', 'Processes', 'CPU Scheduler', 'Memory Manager', 'Process Tree', 'Event Monitor', 'Simulation Archive', 'Settings']) expect(await screen.findByRole('link', { name: new RegExp(label) })).toBeInTheDocument()
+    const destinations = [
+      ['Overview', '/overview'], ['Processes', '/processes'], ['CPU Scheduler', '/scheduler'], ['Memory Manager', '/memory'],
+      ['Process Tree', '/tree'], ['Workload Studio', '/workloads'], ['Algorithm Comparison', '/comparison'],
+      ['Experimentation Lab', '/experiments'], ['System Analytics', '/analytics'], ['Event Monitor', '/events'],
+      ['Simulation Archive', '/archive'], ['CPU Internals', '/internals'], ['Settings', '/settings'],
+    ]
+    for (const [label, destination] of destinations) {
+      const link = screen.getByRole('link', { name: new RegExp(label) })
+      expect(link).toHaveAttribute('href', destination)
+    }
+    expect(screen.getByText('CONTROL ROOM')).toBeInTheDocument()
+    expect(screen.getByText('SYSTEM TOOLS')).toBeInTheDocument()
+    expect(screen.getByText('SETTINGS')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('link', { name: /Process Tree/ })); expect(await screen.findByRole('heading', { name: 'Process tree' })).toBeInTheDocument()
   }, 15000)
 
@@ -94,6 +106,16 @@ describe('Phase 4.2 pages and navigation', () => {
     fireEvent.click(brand)
     expect(await screen.findByRole('heading', { name: /Inside the machine/i })).toBeInTheDocument()
   }, 15000)
+
+  it('uses the landing CPU brand mark and reports simulation state instead of API connectivity', async () => {
+    render(<MemoryRouter initialEntries={['/processes']}><App /></MemoryRouter>)
+    const brand = await screen.findByRole('link', { name: 'KernelX home' })
+    expect(brand.querySelector('svg')).toBeInTheDocument()
+    expect(screen.getByText('SIMULATOR')).toBeInTheDocument()
+    expect(screen.getByText('STATE')).toBeInTheDocument()
+    expect(screen.getByLabelText('Simulation time 8')).toBeInTheDocument()
+    expect(screen.queryByText(/API CONNECTED|API OFFLINE|CONNECTING/)).not.toBeInTheDocument()
+  })
 
   it('shows the new landing route and enters the existing overview', async () => {
     render(<MemoryRouter initialEntries={['/']}><App /></MemoryRouter>)

@@ -1,14 +1,25 @@
 import { Suspense, useEffect, useMemo, useRef } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { Html, OrbitControls } from '@react-three/drei'
-import { Color, Vector3 } from 'three'
+import { BoxGeometry, CatmullRomCurve3, Color, TubeGeometry, Vector3 } from 'three'
 import { WebglFallback } from './WebglFallback'
 import type { AluTableSnapshot, AluTraceStep, FpbQueueSnapshot, FpbTraceStep, HeapEntrySnapshot, HeapTraceStep, PmuListSnapshot, PmuTraceStep, PtuSnapshot, PtuTraceStep } from '../../types/api'
 
 const graphite = '#0B0D0C'
 const cloud = '#F1F0E8'
 const yellow = '#C7F36B'
-const muted = '#858B82'
+type Point3 = [number, number, number]
+const INTERCONNECT_POINTS: Record<'pmu' | 'alu' | 'pdu' | 'fpb' | 'ptu', Point3[]> = {
+  pmu: [[-2.12, .38, -.58], [-2.85, .34, -.62], [-3.46, .42, -1.1], [-4.18, .48, -1.52]],
+  alu: [[2.12, .38, -.58], [2.85, .34, -.62], [3.46, .42, -1.1], [4.18, .48, -1.52]],
+  pdu: [[0, .38, -1.86], [-.25, .32, -2.3], [.25, .28, -2.95], [0, .48, -3.92]],
+  fpb: [[0, .38, 1.86], [.28, .32, 2.35], [-.22, .28, 3.2], [0, .48, 4.18]],
+  ptu: [[.76, .38, 1.78], [1.2, .35, 2.06], [1.45, .34, 2.2]],
+}
+const PROCESSOR_CORES = [
+  { id: 'CORE 01', x: -.62, z: -.5 }, { id: 'CORE 02', x: .62, z: -.5 },
+  { id: 'CORE 03', x: -.62, z: .5 }, { id: 'CORE 04', x: .62, z: .5 },
+]
 
 export function layoutHeapSlots(count: number, spacing = 1.05): Array<{ index: number; x: number; z: number; level: number }> {
   return Array.from({ length: Math.max(0, count) }, (_, index) => {
@@ -21,13 +32,62 @@ export function layoutHeapSlots(count: number, spacing = 1.05): Array<{ index: n
 }
 
 function Plate({ position, size, color, metalness = .2, roughness = .78 }: { position: [number, number, number]; size: [number, number, number]; color: string; metalness?: number; roughness?: number }) {
-  return <mesh position={position} castShadow receiveShadow><boxGeometry args={size} /><meshStandardMaterial color={color} metalness={metalness} roughness={roughness} /></mesh>
+  const geometry = useMemo(() => new BoxGeometry(...size), [size[0], size[1], size[2]])
+  return <mesh position={position} geometry={geometry} castShadow receiveShadow><meshStandardMaterial color={color} metalness={metalness} roughness={roughness} /></mesh>
 }
 function Etch({ position, size, active = false }: { position: [number, number, number]; size: [number, number, number]; active?: boolean }) {
-  return <mesh position={position}><boxGeometry args={size} /><meshBasicMaterial color={active ? yellow : muted} transparent opacity={active ? .9 : .42} /></mesh>
+  const geometry = useMemo(() => new BoxGeometry(...size), [size[0], size[1], size[2]])
+  return <mesh position={position} geometry={geometry}><meshBasicMaterial color={active ? yellow : '#A7B095'} transparent opacity={active ? .9 : .55} /></mesh>
 }
 function Label({ position, children, accent = false, small = false }: { position: [number, number, number]; children: string; accent?: boolean; small?: boolean }) {
   return <Html position={position} center distanceFactor={11} style={{ pointerEvents: 'none', whiteSpace: 'nowrap' }}><span className={`die-label ${accent ? 'die-label-accent' : ''} ${small ? 'die-label-small' : ''}`}>{children}</span></Html>
+}
+
+function Interconnect({ points, active = false }: { points: Point3[]; active?: boolean }) {
+  const curve = useMemo(() => new CatmullRomCurve3(points.map((point) => new Vector3(...point)), false, 'centripetal'), [points])
+  const conduit = useMemo(() => new TubeGeometry(curve, 28, .052, 6, false), [curve])
+  const conductor = useMemo(() => new TubeGeometry(curve, 28, .012, 5, false), [curve])
+  const tone = active ? yellow : '#B38E62'
+  return <group>
+    <mesh geometry={conduit}><meshStandardMaterial color={active ? '#788D4A' : '#526050'} metalness={.68} roughness={.25} transparent opacity={.28} depthWrite={false} /></mesh>
+    <mesh geometry={conductor}><meshStandardMaterial color={tone} metalness={.72} roughness={.28} emissive={tone} emissiveIntensity={active ? .4 : .12} /></mesh>
+    {[points[0], points[points.length - 1]].map((point, index) => <mesh key={index} position={point}>
+      <sphereGeometry args={[.075, 10, 8]} />
+      <meshStandardMaterial color={active ? yellow : '#A98C62'} metalness={.68} roughness={.24} emissive={active ? yellow : '#56432B'} emissiveIntensity={active ? .3 : .08} />
+    </mesh>)}
+  </group>
+}
+
+function ProcessorCore({ activity }: { activity: boolean }) {
+  return <group position={[0, 0, 0]}>
+    <Plate position={[0, .15, 0]} size={[4.15, .42, 3.65]} color="#252B25" metalness={.78} roughness={.34} />
+    <Plate position={[0, .39, 0]} size={[3.92, .12, 3.42]} color="#465044" metalness={.78} roughness={.3} />
+    <Plate position={[0, .47, 0]} size={[3.68, .12, 3.18]} color="#1E271F" metalness={.55} roughness={.4} />
+    <Plate position={[0, .56, 0]} size={[3.08, .14, 2.64]} color="#344238" metalness={.48} roughness={.37} />
+    <Plate position={[0, .66, 0]} size={[2.84, .12, 2.4]} color="#18221C" metalness={.34} roughness={.42} />
+    <Plate position={[0, .75, 0]} size={[2.54, .16, 2.12]} color="#2B392E" metalness={.38} roughness={.33} />
+    {Array.from({ length: 8 }, (_, index) => {
+      const offset = (index - 3.5) * .31
+      return <group key={index}>
+        <Plate position={[offset, .5, -1.68]} size={[.14, .045, .11]} color={index === 3 || index === 4 ? '#C1A06B' : '#8E9B85'} metalness={.82} roughness={.24} />
+        <Plate position={[offset, .5, 1.68]} size={[.14, .045, .11]} color={index === 3 || index === 4 ? '#C1A06B' : '#8E9B85'} metalness={.82} roughness={.24} />
+        <Plate position={[-1.93, .5, offset * .9]} size={[.11, .045, .14]} color="#8E9B85" metalness={.82} roughness={.24} />
+        <Plate position={[1.93, .5, offset * .9]} size={[.11, .045, .14]} color="#8E9B85" metalness={.82} roughness={.24} />
+      </group>
+    })}
+    <Plate position={[0, .88, 0]} size={[2.3, .1, 1.9]} color="#111812" metalness={.25} roughness={.3} />
+    {PROCESSOR_CORES.map((core, index) => <group key={core.id} position={[core.x, .98, core.z]}>
+      <Plate position={[0, 0, 0]} size={[.9, .18, .72]} color="#39463A" metalness={.42} roughness={.32} />
+      <Plate position={[0, .105, 0]} size={[.78, .045, .6]} color={index === 0 ? '#59634D' : '#475349'} metalness={.52} roughness={.3} />
+      <mesh position={[0, .132, -.245]}>
+        <boxGeometry args={[.52, .018, .026]} />
+        <meshStandardMaterial color={activity && index === 0 ? yellow : '#B48E5C'} metalness={.62} roughness={.25} emissive={activity && index === 0 ? yellow : '#614827'} emissiveIntensity={activity && index === 0 ? .55 : .12} />
+      </mesh>
+      <Label position={[0, .19, .01]} small>{core.id}</Label>
+    </group>)}
+    <Label position={[0, 1.34, -1.02]} accent>KERNELX · MULTI-CORE CPU</Label>
+    <Label position={[0, .49, 1.72]} small>CPU PACKAGE / SYSTEM INTERCONNECT</Label>
+  </group>
 }
 
 function AnimatedDescriptor({ entry, from, to, sequence }: { entry: HeapEntrySnapshot; from: [number, number, number]; to: [number, number, number]; sequence: number }) {
@@ -58,9 +118,9 @@ function AluUnit({ snapshot, focused, active, onFocus }: { snapshot: AluTableSna
   const rows = Math.max(1, Math.ceil(visible.length / columns))
   const width = focused ? 5.4 : 3.25
   const depth = focused ? Math.max(4.8, rows * .73 + .9) : 4.45
-  return <group position={[4.25, .14, -.08]} onClick={(event) => { event.stopPropagation(); onFocus() }}>
-    <Plate position={[0, .19, 0]} size={[width, .25, depth]} color="#171915" metalness={.58} />
-    <Plate position={[0, .34, 0]} size={[width - .12, .07, depth - .12]} color="#292B26" metalness={.3} />
+  return <group position={[6, .14, -2]} onClick={(event) => { event.stopPropagation(); onFocus() }}>
+    <Plate position={[0, .19, 0]} size={[width, .25, depth]} color="#202920" metalness={.58} />
+    <Plate position={[0, .34, 0]} size={[width - .12, .07, depth - .12]} color="#354235" metalness={.3} />
     <Label position={[0, .48, depth / 2 - .13]}>ASSOCIATIVE LOOKUP UNIT / SEPARATE CHAINING</Label>
     {snapshot ? visible.map((bucket, index) => {
       const col = index % columns; const row = Math.floor(index / columns)
@@ -68,7 +128,7 @@ function AluUnit({ snapshot, focused, active, onFocus }: { snapshot: AluTableSna
       const z = (row - (rows - 1) / 2) * .72
       const populated = bucket.chainLength > 0
       return <group key={bucket.index} position={[x, .52, z]}>
-        <Plate position={[0, 0, 0]} size={[focused ? 1.05 : 1.22, .07, .58]} color={populated ? '#454740' : '#20221F'} />
+        <Plate position={[0, 0, 0]} size={[focused ? 1.05 : 1.22, .07, .58]} color={populated ? '#64705F' : '#303A31'} />
         {(populated || active?.bucketIndex === bucket.index) && <Plate position={[0, .05, -.25]} size={[.48, .018, .025]} color={active?.bucketIndex === bucket.index || bucket.chainLength > 1 ? yellow : cloud} />}
         <Label position={[0, .12, 0]} accent={bucket.chainLength > 1 || active?.bucketIndex === bucket.index} small>{`${String(bucket.index).padStart(2,'0')} · ${bucket.chainLength ? bucket.entries.map((entry) => `P${entry.pid}`).join('→') : 'EMPTY'}`}</Label>
       </group>
@@ -82,9 +142,9 @@ function FpbUnit({ queue, algorithm, focused, active, onFocus }: { queue: FpbQue
   const nodes = queue?.nodes.slice(0, focused ? 8 : 3) ?? []
   const width = focused ? 9 : 4.4
   const spacing = focused ? 1.05 : 1.15
-  return <group position={[0, .13, 2.55]} onClick={(event) => { event.stopPropagation(); onFocus() }}>
-    <Plate position={[0, .19, 0]} size={[width, .25, 1.62]} color="#171915" metalness={.58} />
-    <Plate position={[0, .34, 0]} size={[width - .12, .07, 1.5]} color="#292B26" metalness={.3} />
+  return <group position={[0, .13, 5.1]} onClick={(event) => { event.stopPropagation(); onFocus() }}>
+    <Plate position={[0, .19, 0]} size={[width, .25, 1.62]} color="#202920" metalness={.58} />
+    <Plate position={[0, .34, 0]} size={[width - .12, .07, 1.5]} color="#354235" metalness={.3} />
     <Label position={[0, .48, .63]}>{`FIFO PROCESS BUFFER${algorithm ? ` / ${algorithm} HISTORY` : ''}`}</Label>
     {nodes.length ? <>
       {nodes.map((node, index) => {
@@ -134,9 +194,9 @@ function PmuUnit({ snapshot, beforeSnapshot, focused, historical, active, visite
   const activeOwner = active?.ownerNodeId ?? active?.nodeId ?? null
   const incomingNode = incomingNodeId === null ? null : active?.node ?? null
 
-  return <group position={[-4.25, 0, -.08]} onClick={(event) => { event.stopPropagation(); onFocus() }}>
-    <Plate position={[0, .19, 0]} size={[width + .3, .28, depth + .3]} color="#171915" metalness={.58} roughness={.54} />
-    <Plate position={[0, .36, 0]} size={[width, .08, depth]} color={focused ? '#353730' : '#292B26'} metalness={.32} />
+  return <group position={[-6, 0, -2]} onClick={(event) => { event.stopPropagation(); onFocus() }}>
+    <Plate position={[0, .19, 0]} size={[width + .3, .28, depth + .3]} color="#202920" metalness={.58} roughness={.54} />
+    <Plate position={[0, .36, 0]} size={[width, .08, depth]} color={focused ? '#596650' : '#354235'} metalness={.32} />
     <Label position={[0, .49, depth / 2 - .12]}>PCB MEMORY UNIT / CUSTOM SINGLY LINKED LIST</Label>
     {snapshot && <Label position={[0, .49, -depth / 2 + .12]} small>{`${historical ? 'HISTORICAL REPLAY · READ ONLY' : 'LIVE LIST'} · ${snapshot.size} PCBS · LOGICAL IDS`}</Label>}
     {!snapshot && <Label position={[0, .62, 0]} small>READING LIVE LIST SNAPSHOT</Label>}
@@ -148,7 +208,7 @@ function PmuUnit({ snapshot, beforeSnapshot, focused, historical, active, visite
       const position = positionFor(index)
       const selected = node.nodeId === activeOwner || visitedNodeIds.includes(node.nodeId)
       return <group key={node.nodeId} position={position}>
-        <Plate position={[0, .01, 0]} size={[spacingX * .76, .12, .56]} color={selected ? '#D5D4CB' : '#454740'} metalness={.28} />
+        <Plate position={[0, .01, 0]} size={[spacingX * .76, .12, .56]} color={selected ? '#D5D4CB' : '#697466'} metalness={.28} />
         {selected && <Plate position={[0, .085, -.265]} size={[spacingX * .56, .012, .025]} color={yellow} metalness={.1} roughness={.6} />}
         <Html position={[0, .19, 0]} center distanceFactor={focused ? 8 : 11} style={{ pointerEvents: 'none' }}>
           <div className={`pmu-node-label ${selected ? 'pmu-node-selected' : ''}`}>
@@ -244,9 +304,9 @@ function PriorityUnit({ entries, active, focused, animate, onFocus }: { entries:
   const slots = visibleEntries.length
   const width = Math.max(4.65, Math.min(14, 2 ** Math.ceil(Math.log2(Math.max(1, slots))) * .8 + .6))
   const depth = focused ? Math.max(2.3, Math.ceil(Math.log2(Math.max(1, slots))) * .62 + 1.2) : 2.25
-  return <group position={[0, 0, -2.55]} onClick={(event) => { event.stopPropagation(); onFocus() }}>
-    <Plate position={[0, .19, 0]} size={[width + .34, .28, depth + .32]} color="#171915" metalness={.58} roughness={.52} />
-    <Plate position={[0, .36, 0]} size={[width, .08, depth]} color={focused ? '#393B35' : '#292B26'} metalness={.4} />
+  return <group position={[0, 0, -5.15]} onClick={(event) => { event.stopPropagation(); onFocus() }}>
+    <Plate position={[0, .19, 0]} size={[width + .34, .28, depth + .32]} color="#202920" metalness={.58} roughness={.52} />
+    <Plate position={[0, .36, 0]} size={[width, .08, depth]} color={focused ? '#596650' : '#354235'} metalness={.4} />
     <Plate position={[-width / 2 + .15, .44, 0]} size={[.08, .08, depth - .18]} color={active ? yellow : '#74766E'} />
     <Label position={[0, .51, depth / 2 - .13]}>{focused ? 'PRIORITY DISPATCH UNIT / MAX HEAP' : 'PRIORITY DISPATCH UNIT'}</Label>
     {!entries.length && <Label position={[0, .62, 0]} small>NO RECORDED HEAP ENTRIES</Label>}
@@ -261,8 +321,8 @@ function CameraRig({ focused, focusTarget, resetKey }: { focused: boolean; focus
   const desiredPosition = useRef(new Vector3())
   const desiredTarget = useRef(new Vector3())
   useEffect(() => {
-    desiredPosition.current.set(...(focused ? (focusTarget === 'PMU' ? [-4.25, 8.5, 7.3] as [number, number, number] : focusTarget === 'ALU' ? [4.25, 8.5, 7.3] as [number, number, number] : focusTarget === 'FPB' ? [0, 7.8, 8.8] as [number, number, number] : focusTarget === 'PTU' ? [0, 8.3, 6.9] as [number, number, number] : [0, 7.6, 6.9] as [number, number, number]) : [0, 11.2, 13.8] as [number, number, number]))
-    desiredTarget.current.set(...(focused ? (focusTarget === 'PMU' ? [-4.25, .15, -.08] as [number, number, number] : focusTarget === 'ALU' ? [4.25, .15, -.08] as [number, number, number] : focusTarget === 'FPB' ? [0, .15, 2.55] as [number, number, number] : focusTarget === 'PTU' ? [0, .15, -.04] as [number, number, number] : [0, .15, -2.5] as [number, number, number]) : [0, 0, 0] as [number, number, number]))
+    desiredPosition.current.set(...(focused ? (focusTarget === 'PMU' ? [-6, 8.2, 4.8] as [number, number, number] : focusTarget === 'ALU' ? [6, 8.2, 4.8] as [number, number, number] : focusTarget === 'FPB' ? [0, 8.5, 12.2] as [number, number, number] : focusTarget === 'PTU' ? [0, 8.1, 8.9] as [number, number, number] : [0, 8.1, 1.65] as [number, number, number]) : [0, 14.5, 19] as [number, number, number]))
+    desiredTarget.current.set(...(focused ? (focusTarget === 'PMU' ? [-6, .15, -2] as [number, number, number] : focusTarget === 'ALU' ? [6, .15, -2] as [number, number, number] : focusTarget === 'FPB' ? [0, .15, 5.1] as [number, number, number] : focusTarget === 'PTU' ? [0, .15, 2.45] as [number, number, number] : [0, .15, -5.15] as [number, number, number]) : [0, 0, 0] as [number, number, number]))
     running.current = true
     invalidate()
   }, [focused, focusTarget, resetKey, invalidate])
@@ -282,7 +342,7 @@ function PtuUnit({ snapshot, focused, active, onFocus }: { snapshot: PtuSnapshot
   const visible = snapshot?.nodes.slice(0, focused ? 18 : 5) ?? []
   const positions = new Map(visible.map((node, i) => [node.pid, [((i % 6) - 2.5) * (focused ? .82 : .65), .56, .28 - Math.floor(i / 6) * .48] as [number, number, number]]))
   const width = focused ? 7.8 : 3.9
-  return <group position={[0,.14,-.04]} onClick={(e)=>{e.stopPropagation();onFocus()}}><Plate position={[0,.19,0]} size={[width,.25,focused?2.4:1.58]} color="#171915" metalness={.58}/><Plate position={[0,.34,0]} size={[width-.12,.07,focused?2.28:1.46]} color="#292B26" metalness={.3}/><Label position={[0,.49,focused?.98:.62]}>PROCESS TREE UNIT / FIRST CHILD · NEXT SIBLING</Label>
+  return <group position={[0,.14,2.45]} onClick={(e)=>{e.stopPropagation();onFocus()}}><Plate position={[0,.19,0]} size={[width,.25,focused?2.4:1.58]} color="#202920" metalness={.58}/><Plate position={[0,.34,0]} size={[width-.12,.07,focused?2.28:1.46]} color="#354235" metalness={.3}/><Label position={[0,.49,focused?.98:.62]}>PROCESS TREE UNIT / FIRST CHILD · NEXT SIBLING</Label>
     {visible.map((node)=>{const p=positions.get(node.pid)!;const selected=active?.currentPid===node.pid||active?.visitedPid===node.pid;return <group key={node.pid} position={p}><Plate position={[0,0,0]} size={[.67,.08,.32]} color={selected?'#77786F':'#454740'}/><Label position={[0,.14,0]} accent={selected} small>{`P${node.pid} · ${node.state}`}</Label></group>})}
     {visible.flatMap(node=>{const from=positions.get(node.pid);if(!from)return[];return (['firstChildPid','nextSiblingPid'] as const).map(kind=>{const target=node[kind],to=target==null?null:positions.get(target);if(!to)return null;const activeLink=active?.currentPid===node.pid&&((kind==='firstChildPid'&&active.firstChildAfter===target)||(kind==='nextSiblingPid'&&active.nextSiblingAfter===target));return <PointerBeam key={`${node.pid}-${kind}`} from={from} to={to} active={activeLink}/>})})}
     {!visible.length&&<Label position={[0,.62,0]} small>NO PROCESSES IN TREE</Label>}{snapshot&&snapshot.nodes.length>visible.length&&<Label position={[0,.55,-.96]} small>{`VISIBLE ${visible.length} / ${snapshot.size} · ${snapshot.rootCount} ROOTS`}</Label>}</group>
@@ -304,27 +364,42 @@ function DieAssembly({ focused, focusTarget, resetKey, entries, active, animate,
   const aluFocused = focused && focusTarget === 'ALU'
   const fpbFocused = focused && focusTarget === 'FPB'
   const ptuFocused = focused && focusTarget === 'PTU'
+  const boardMounts: Point3[] = [[-10.35, .035, -7.25], [10.35, .035, -7.25], [-10.35, .035, 7.25], [10.35, .035, 7.25]]
   return <>
-    <ambientLight intensity={1.1} color={cloud} />
-    <directionalLight position={[-7, 12, 8]} intensity={2.4} color="#F3F2EC" castShadow shadow-mapSize-width={1024} shadow-mapSize-height={1024} />
-    <directionalLight position={[8, 6, -8]} intensity={.55} color="#AAA99F" />
-    <Plate position={[0, -.63, 0]} size={[13.25, .7, 9.15]} color="#171915" metalness={.72} roughness={.45} />
-    <Plate position={[0, -.19, 0]} size={[12.75, .24, 8.65]} color="#282A25" metalness={.3} roughness={.8} />
-    <Plate position={[0, -.04, 0]} size={[12.25, .1, 8.15]} color="#20221F" metalness={.15} roughness={.86} />
-    <Etch position={[0, .018, 0]} size={[11.6, .012, .018]} />
-    <Etch position={[0, .018, 0]} size={[.018, .012, 7.6]} />
-    <Etch position={[-5.35, .02, -2.55]} size={[1.3, .014, .02]} active={pmuFocused} />
-    <Etch position={[5.3, .02, -1.35]} size={[.02, .014, 2.3]} />
-    <Etch position={[0, .02, 3.15]} size={[4.2, .014, .02]} />
+    <ambientLight intensity={1.18} color={cloud} />
+    <hemisphereLight args={['#DCE6D4', '#242920', .62]} />
+    <directionalLight position={[-9, 15, 10]} intensity={2.15} color="#F1F0E8" castShadow shadow-mapSize-width={768} shadow-mapSize-height={768} />
+    <directionalLight position={[10, 8, -9]} intensity={.82} color="#D3B786" />
+    <directionalLight position={[0, 7, 12]} intensity={.4} color="#B9D477" />
+    <Plate position={[0, -.63, 0]} size={[22.5, .7, 16.5]} color="#151A16" metalness={.72} roughness={.42} />
+    <Plate position={[0, -.19, 0]} size={[22.05, .24, 16.05]} color="#29322B" metalness={.52} roughness={.62} />
+    <Plate position={[0, -.04, 0]} size={[21.7, .1, 15.7]} color="#1C241D" metalness={.34} roughness={.78} />
+    <Etch position={[0, .018, 0]} size={[20.9, .012, .018]} />
+    <Etch position={[0, .018, 0]} size={[.018, .012, 14.9]} />
+    <Etch position={[-9.6, .02, 0]} size={[.02, .014, 11.8]} />
+    <Etch position={[9.6, .02, 0]} size={[.02, .014, 11.8]} />
+    <Etch position={[0, .02, -6.9]} size={[18.7, .014, .02]} />
+    <Etch position={[0, .02, 6.9]} size={[18.7, .014, .02]} />
+    {boardMounts.map((position, index) => <group key={index} position={position}>
+      <mesh rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[.19, .025, 6, 20]} /><meshStandardMaterial color="#A68B62" metalness={.8} roughness={.28} /></mesh>
+      <mesh><cylinderGeometry args={[.07, .07, .025, 12]} /><meshStandardMaterial color="#586253" metalness={.8} roughness={.3} /></mesh>
+    </group>)}
+    <Interconnect points={INTERCONNECT_POINTS.pmu} active={pmuFocused || pmuActive !== null} />
+    <Interconnect points={INTERCONNECT_POINTS.alu} active={aluFocused || aluActive !== null} />
+    <Interconnect points={INTERCONNECT_POINTS.pdu} active={pduFocused || active !== null} />
+    <Interconnect points={INTERCONNECT_POINTS.fpb} active={fpbFocused || fpbActive !== null} />
+    <Interconnect points={INTERCONNECT_POINTS.ptu} active={ptuFocused || ptuActive !== null} />
+    <ProcessorCore activity={active !== null || fpbActive !== null} />
     <PmuUnit snapshot={pmuSnapshot} beforeSnapshot={pmuBeforeSnapshot} focused={pmuFocused} historical={pmuHistorical}
       active={pmuActive} visitedNodeIds={pmuVisitedNodeIds} incomingNodeId={pmuIncomingNodeId} onFocus={onPmuFocus} />
     <AluUnit snapshot={aluSnapshot} focused={aluFocused} active={aluActive} onFocus={onAluFocus} />
     <PtuUnit snapshot={ptuSnapshot} focused={ptuFocused} active={ptuActive} onFocus={onPtuFocus} />
     <FpbUnit queue={fpbQueue} algorithm={fpbAlgorithm} focused={fpbFocused} active={fpbActive} onFocus={onFpbFocus} />
     <PriorityUnit entries={entries} active={active} focused={pduFocused} animate={animate} onFocus={onFocus} />
-    <Label position={[-5.82, .1, -3.65]} small>ADDRESS BUS</Label>
-    <Label position={[5.6, .1, 3.4]} small>CONTROL / DATA ROUTES</Label>
-    <OrbitControls ref={controls} makeDefault enablePan enableZoom enableRotate minDistance={6} maxDistance={25} enableDamping dampingFactor={.12} />
+    <Label position={[-8.3, .1, -4.9]} accent small>PCB / MEMORY BUS</Label>
+    <Label position={[8.2, .1, -4.8]} accent small>PID ADDRESS BUS</Label>
+    <Label position={[0, .1, 7.05]} small>FIFO / PROCESS OUTPUT ROUTE</Label>
+    <OrbitControls ref={controls} makeDefault enablePan enableZoom enableRotate minDistance={7} maxDistance={34} enableDamping dampingFactor={.12} />
     <CameraRig focused={focused} focusTarget={focusTarget} resetKey={resetKey} />
   </>
 }
@@ -339,7 +414,7 @@ export function ProcessorDieScene({ focused, focusTarget = 'PDU', resetKey, entr
   pmuActive?: PmuTraceStep | null; pmuVisitedNodeIds?: number[]; pmuIncomingNodeId?: number | null
   pmuHistorical?: boolean; animate?: boolean
 }) {
-  return <Canvas shadows dpr={[1, 1.5]} frameloop="demand" camera={{ position: [0, 11.2, 13.8], fov: 43 }} fallback={<WebglFallback />} gl={{ antialias: true, powerPreference: 'low-power', alpha: false }}>
+  return <Canvas shadows dpr={[1, 1.25]} frameloop="demand" camera={{ position: [0, 14.5, 19], fov: 43 }} fallback={<WebglFallback />} gl={{ antialias: true, powerPreference: 'low-power', alpha: false }}>
     <color attach="background" args={[new Color(graphite)]} />
     <fog attach="fog" args={[graphite, 18, 34]} />
     <Suspense fallback={null}><DieAssembly focused={focused} focusTarget={focusTarget} resetKey={resetKey} entries={entries} active={active}

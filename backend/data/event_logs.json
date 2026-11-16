@@ -136,4 +136,28 @@
   "pid" : 3,
   "type" : "PROCESS_CREATED",
   "description" : "Process idk2 created"
+}, {
+  "eventId" : 24,
+  "simulationTime" : 0,
+  "pid" : 61201,
+  "type" : "PROCESS_CREATED",
+  "description" : "Process render created"
+}, {
+  "eventId" : 25,
+  "simulationTime" : 0,
+  "pid" : 61202,
+  "type" : "PROCESS_CREATED",
+  "description" : "Process build created"
+}, {
+  "eventId" : 26,
+  "simulationTime" : 0,
+  "pid" : 61203,
+  "type" : "PROCESS_CREATED",
+  "description" : "Process analysis created"
+}, {
+  "eventId" : 27,
+  "simulationTime" : 0,
+  "pid" : null,
+  "type" : "SIMULATION_STARTED",
+  "description" : "Started ROUND_ROBIN simulation for 3 processes"
 } ]

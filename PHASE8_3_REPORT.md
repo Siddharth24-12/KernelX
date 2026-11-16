@@ -105,3 +105,47 @@ The test addition covers KERNELX logo navigation to `/` from `/processes` and `/
 ### Remaining issues and readiness
 
 Automated frontend/backend checks pass, and the internal brand navigation has test coverage for two internal routes. Browser acceptance remains incomplete because browser control was stopped. In particular, the full set of internal routes, DSA trace panels, responsive breakpoints, browser console/network behavior and rendered landing-page comparison were not inspected. The phase is **partially verified**, not fully accepted, until those browser checks can be completed. No screenshots are attached for this follow-up.
+
+## Workspace visual refinement update — 2026-11-16
+
+This update responds to the expanded internal-workspace refinement brief. It preserves the existing landing implementation and backend behavior.
+
+### Additional changes
+
+- Changed the internal sidebar mark to the same outlined CPU icon used by the landing page and kept it as an accessible React Router link to `/`.
+- Removed the generic API connectivity status presentation from the header. The header now displays the simulator workspace label and actual simulation state/time from `useSystemData`.
+- Added a restrained static grid and low-opacity ambient lighting to `.app-frame`; no Canvas, continuous animation, or landing style token is shared with it.
+- Refined sidebar active backgrounds and label overflow; tightened the Workload Studio column ratio; improved CPU Internals canvas backdrop and label contrast without changing the real 3D scene geometry or DSA data/replay paths.
+- Added a regression test confirming the CPU brand mark, simulation state/time and absence of the API connectivity badge.
+
+### Additional files changed
+
+- `frontend/src/layouts/AppShell.tsx`
+- `frontend/src/internal-theme.css`
+- `frontend/src/pages/Phase42Pages.test.tsx`
+- `README.md`
+- `DEVELOPMENT.md`
+- `PHASE8_3_REPORT.md`
+
+For the complete phase file list, see the preceding internal application redesign section. Landing implementation files (`frontend/src/pages/LandingPage.tsx`, `frontend/src/components/landing/**`, and landing styles in `frontend/src/design-system.css`) were not edited. The shell theme only applies under `.app-frame`.
+
+### Verification after the workspace refinement
+
+| Check | Result | Evidence |
+|---|---|---|
+| Backend | PASS | `mvn test`: 68 tests, 0 failures, 0 errors, 0 skipped. |
+| Frontend tests | PASS | `npm test`: 78 tests across 16 files passed. |
+| TypeScript | PASS | `npm run typecheck` exited 0. |
+| Production build | PASS | `npm run build` succeeded. Existing Three.js bundle warning remains (React Three Fiber chunk about 874 kB minified). |
+| Desktop internal browser spot checks | PARTIAL | Chrome at `http://127.0.0.1:5174/`: clicked the sidebar logo from `/internals` and confirmed the existing `/` landing route; inspected Overview and Workload Studio at 1536×864. Header state/time and template/editor columns rendered; no page-width horizontal scrolling was visible in those page captures. This was a spot check, not an inspection of all routes or viewport sizes. |
+| CPU Internals backend panels | PARTIAL | Actual live PMU, ALU and PTU snapshots rendered in the browser. The application showed 3 PCBs, 7 PMU traces, ALU capacity 16 with 3 entries and PTU with 3 roots. No heap run or FPB trace was selected in that browser state. |
+| CPU Internals WebGL | BLOCKED | Chrome displayed “This browser or device could not create a WebGL context.” Therefore 3D geometry, orbit/zoom/pan, camera reset behavior inside the canvas, focused die views and 3D active-operation highlighting could not be verified. No browser setting was changed to bypass this limitation. |
+| Browser console/network errors | NOT VERIFIED | DevTools console and network panels were not inspected. |
+| Mobile/tablet/reduced-motion | NOT VERIFIED | No alternate viewport or OS reduced-motion capture was performed. Sidebar/workload responsive rules are implemented but visual acceptance at those sizes is pending. |
+| Landing page source scope | PASS | Landing component and styles were not modified; internal design rules remain scoped under `.app-frame`. |
+| Landing visual regression comparison | NOT VERIFIED | The landing route was opened and its static fallback was visible, but a baseline screenshot comparison was unavailable. The browser also reported no WebGL context, so the 3D landing scene could not be compared in this environment. No pixel-identical rendering claim is made. |
+| Whitespace | PASS | `git diff --check` exited 0 after the documentation updates; Git emitted only existing line-ending conversion warnings. |
+
+### Current readiness
+
+Automated checks pass and desktop spot checks confirm the new header behavior, logo route, Overview and Workload Studio layouts. The phase remains **partially verified** because the browser cannot create a WebGL context, and responsive, full-route, console/network and visual landing regression checks remain outstanding. Screenshots were displayed by Computer Use during this session but were not saved as report image files. Computer Use later reported that it was stopped with the physical Escape key; no further browser actions were taken.

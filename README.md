@@ -2,7 +2,7 @@
 
 KernelX is a DSA-centered operating system scheduling simulator. The backend now includes custom data structures, a deterministic simulation engine, JSON persistence, and REST APIs. It deliberately simulates CPU and memory; it does not report measurements from the host computer.
 
-> **Status:** Phases 1–4, CPU Internals Phases 5A–5F, and Phases 6A–6E are implemented. Phase 7C stability review is partially verified; remaining browser checks and readiness findings are recorded in [PHASE7C_REPORT.md](PHASE7C_REPORT.md). Phase 8.5 replaces the landing-page low-poly scene with an original cinematic hardware environment. The internal application now has a separately scoped graphite/lime theme and its KERNELX logo links to `/`; see [PHASE8_3_REPORT.md](PHASE8_3_REPORT.md) for the internal redesign scope and verification limits.
+> **Status:** Phases 1–4, CPU Internals Phases 5A–5F, and Phases 6A–6E are implemented. Phase 7C stability review is partially verified; remaining browser checks and readiness findings are recorded in [PHASE7C_REPORT.md](PHASE7C_REPORT.md). Phase 8.5 replaces the landing-page low-poly scene with an original cinematic hardware environment. Internal workspace and CPU Internals refinements are separately scoped from the landing page; see [PHASE8_3_REPORT.md](PHASE8_3_REPORT.md) and [PHASE8_4_REPORT.md](PHASE8_4_REPORT.md) for scope and verification limits.
 
 ## Features
 
@@ -183,6 +183,8 @@ Phase 4 and CPU Internals Phases 5A–5F are complete. CPU Internals includes th
 ## Frontend (Phase 4)
 
 The simulator includes Overview, Processes, CPU Scheduler, Memory Manager, Process Tree, Event Monitor, Simulation Archive, Workload Studio, Algorithm Comparison, System Analytics, Experimentation Lab, CPU Internals and Settings. The Phase 8 landing page is at `/`; use `/overview` for the existing simulator dashboard. Scheduler and memory visualizations render actual backend data. See [FRONTEND_API_MAPPING.md](FRONTEND_API_MAPPING.md) for each integration and capability limit.
+
+Internal pages use a shell-scoped graphite workspace theme that leaves the landing route styles isolated. The sidebar brand uses the landing page's CPU mark and links back to `/`. The header shows the current simulation state and simulation clock rather than a separate API connectivity badge. The workspace background uses a restrained static grid and ambient CSS lighting; no additional scene or animation is loaded for the shell. Current refinement scope and verification, including the browser WebGL limitation, is recorded in [PHASE8_3_REPORT.md](PHASE8_3_REPORT.md).
 
 Install and run from Windows PowerShell:
 
