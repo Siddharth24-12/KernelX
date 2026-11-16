@@ -1,13 +1,16 @@
 C:\Users\atsid\OneDrive\Desktop\KernelX\backend\src\test\java\com\kernelx\controller\AluApiIntegrationTest.java
 C:\Users\atsid\OneDrive\Desktop\KernelX\backend\src\test\java\com\kernelx\controller\AnalyticsApiIntegrationTest.java
 C:\Users\atsid\OneDrive\Desktop\KernelX\backend\src\test\java\com\kernelx\controller\ComparisonApiIntegrationTest.java
+C:\Users\atsid\OneDrive\Desktop\KernelX\backend\src\test\java\com\kernelx\controller\CorsConfigurationIntegrationTest.java
 C:\Users\atsid\OneDrive\Desktop\KernelX\backend\src\test\java\com\kernelx\controller\ExperimentApiIntegrationTest.java
 C:\Users\atsid\OneDrive\Desktop\KernelX\backend\src\test\java\com\kernelx\controller\FpbApiIntegrationTest.java
 C:\Users\atsid\OneDrive\Desktop\KernelX\backend\src\test\java\com\kernelx\controller\HeapTraceApiIntegrationTest.java
 C:\Users\atsid\OneDrive\Desktop\KernelX\backend\src\test\java\com\kernelx\controller\Phase3ApiIntegrationTest.java
+C:\Users\atsid\OneDrive\Desktop\KernelX\backend\src\test\java\com\kernelx\controller\Phase6EIntegrationTest.java
 C:\Users\atsid\OneDrive\Desktop\KernelX\backend\src\test\java\com\kernelx\controller\PmuApiIntegrationTest.java
 C:\Users\atsid\OneDrive\Desktop\KernelX\backend\src\test\java\com\kernelx\controller\PtuApiIntegrationTest.java
 C:\Users\atsid\OneDrive\Desktop\KernelX\backend\src\test\java\com\kernelx\controller\WorkloadApiIntegrationTest.java
+C:\Users\atsid\OneDrive\Desktop\KernelX\backend\src\test\java\com\kernelx\controller\WorkloadIntegrityIntegrationTest.java
 C:\Users\atsid\OneDrive\Desktop\KernelX\backend\src\test\java\com\kernelx\dsa\CustomHashTableTest.java
 C:\Users\atsid\OneDrive\Desktop\KernelX\backend\src\test\java\com\kernelx\dsa\CustomQueueTest.java
 C:\Users\atsid\OneDrive\Desktop\KernelX\backend\src\test\java\com\kernelx\dsa\MaxHeapTest.java

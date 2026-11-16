@@ -1,6 +1,6 @@
 # KernelX frontend ↔ backend API mapping
 
-Base URL comes from `VITE_API_BASE_URL` (default `http://localhost:8081`). The frontend types mirror the Spring DTOs and the app sends requests through the shared Axios client.
+Base URL comes from `VITE_API_BASE_URL` (default `http://localhost:8083`). The frontend types mirror the Spring DTOs and the app sends requests through the shared Axios client.
 
 | Frontend feature | Backend endpoint | HTTP method | Request body | Response structure | Integration status |
 |---|---|---|---|---|---|

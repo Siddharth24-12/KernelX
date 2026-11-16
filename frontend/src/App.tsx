@@ -4,6 +4,7 @@ import { AppShell } from './layouts/AppShell'
 import { Loading } from './components/common'
 
 const OverviewPage = lazy(() => import('./pages/OverviewPage').then((module) => ({ default: module.OverviewPage })))
+const LandingPage = lazy(() => import('./pages/LandingPage').then((module) => ({ default: module.LandingPage })))
 const ProcessesPage = lazy(() => import('./pages/ProcessesPage').then((module) => ({ default: module.ProcessesPage })))
 const SchedulerPage = lazy(() => import('./pages/SchedulerPage').then((module) => ({ default: module.SchedulerPage })))
 const MemoryPage = lazy(() => import('./pages/MemoryPage').then((module) => ({ default: module.MemoryPage })))
@@ -18,5 +19,23 @@ const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage').then((module) =
 const ExperimentationLabPage = lazy(() => import('./pages/ExperimentationLabPage').then((module) => ({ default: module.ExperimentationLabPage })))
 
 export function App() {
-  return <Routes><Route element={<AppShell />}><Route index element={<Suspense fallback={<Loading />}><OverviewPage /></Suspense>} /><Route path="processes" element={<Suspense fallback={<Loading />}><ProcessesPage /></Suspense>} /><Route path="workloads" element={<Suspense fallback={<Loading />}><WorkloadStudioPage /></Suspense>} /><Route path="comparison" element={<Suspense fallback={<Loading />}><AlgorithmComparisonPage /></Suspense>} /><Route path="experiments" element={<Suspense fallback={<Loading />}><ExperimentationLabPage /></Suspense>} /><Route path="analytics" element={<Suspense fallback={<Loading />}><AnalyticsPage /></Suspense>} /><Route path="scheduler" element={<Suspense fallback={<Loading />}><SchedulerPage /></Suspense>} /><Route path="memory" element={<Suspense fallback={<Loading />}><MemoryPage /></Suspense>} /><Route path="tree" element={<Suspense fallback={<Loading />}><ProcessTreePage /></Suspense>} /><Route path="events" element={<Suspense fallback={<Loading />}><EventMonitorPage /></Suspense>} /><Route path="archive" element={<Suspense fallback={<Loading />}><ArchivePage /></Suspense>} /><Route path="settings" element={<Suspense fallback={<Loading />}><SettingsPage /></Suspense>} /><Route path="internals" element={<Suspense fallback={<Loading />}><CpuInternalsPage /></Suspense>} /><Route path="*" element={<Navigate to="/" replace />} /></Route></Routes>
+  return <Routes>
+    <Route path="/" element={<Suspense fallback={<Loading />}><LandingPage /></Suspense>} />
+    <Route element={<AppShell />}>
+      <Route path="overview" element={<Suspense fallback={<Loading />}><OverviewPage /></Suspense>} />
+      <Route path="processes" element={<Suspense fallback={<Loading />}><ProcessesPage /></Suspense>} />
+      <Route path="workloads" element={<Suspense fallback={<Loading />}><WorkloadStudioPage /></Suspense>} />
+      <Route path="comparison" element={<Suspense fallback={<Loading />}><AlgorithmComparisonPage /></Suspense>} />
+      <Route path="experiments" element={<Suspense fallback={<Loading />}><ExperimentationLabPage /></Suspense>} />
+      <Route path="analytics" element={<Suspense fallback={<Loading />}><AnalyticsPage /></Suspense>} />
+      <Route path="scheduler" element={<Suspense fallback={<Loading />}><SchedulerPage /></Suspense>} />
+      <Route path="memory" element={<Suspense fallback={<Loading />}><MemoryPage /></Suspense>} />
+      <Route path="tree" element={<Suspense fallback={<Loading />}><ProcessTreePage /></Suspense>} />
+      <Route path="events" element={<Suspense fallback={<Loading />}><EventMonitorPage /></Suspense>} />
+      <Route path="archive" element={<Suspense fallback={<Loading />}><ArchivePage /></Suspense>} />
+      <Route path="settings" element={<Suspense fallback={<Loading />}><SettingsPage /></Suspense>} />
+      <Route path="internals" element={<Suspense fallback={<Loading />}><CpuInternalsPage /></Suspense>} />
+      <Route path="*" element={<Navigate to="/overview" replace />} />
+    </Route>
+  </Routes>
 }

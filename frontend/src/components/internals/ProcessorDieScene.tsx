@@ -5,10 +5,10 @@ import { Color, Vector3 } from 'three'
 import { WebglFallback } from './WebglFallback'
 import type { AluTableSnapshot, AluTraceStep, FpbQueueSnapshot, FpbTraceStep, HeapEntrySnapshot, HeapTraceStep, PmuListSnapshot, PmuTraceStep, PtuSnapshot, PtuTraceStep } from '../../types/api'
 
-const graphite = '#20221F'
-const cloud = '#F3F2EC'
-const yellow = '#F5D547'
-const muted = '#74766E'
+const graphite = '#0B0D0C'
+const cloud = '#F1F0E8'
+const yellow = '#C7F36B'
+const muted = '#858B82'
 
 export function layoutHeapSlots(count: number, spacing = 1.05): Array<{ index: number; x: number; z: number; level: number }> {
   return Array.from({ length: Math.max(0, count) }, (_, index) => {

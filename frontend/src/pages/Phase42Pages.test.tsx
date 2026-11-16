@@ -7,6 +7,7 @@ import { ArchivePage } from './ArchivePage'
 import { EventMonitorPage } from './EventMonitorPage'
 import { ProcessTreePage } from './ProcessTreePage'
 import { SettingsPage } from './SettingsPage'
+import { LandingStoryOverlay } from '../components/landing/LandingStoryOverlay'
 import type { useSystemData } from '../hooks/useSystemData'
 import type { ProcessTreeNode, SavedConfiguration, SavedSimulation, SystemEvent } from '../types/api'
 
@@ -81,8 +82,32 @@ describe('Phase 4.2 pages and navigation', () => {
     expect(screen.getByText('Saved in this browser')).toBeInTheDocument()
   })
   it('exposes all eight working navigation routes', async () => {
-    render(<MemoryRouter initialEntries={['/']}><App /></MemoryRouter>)
-    for (const label of ['Overview', 'Processes', 'CPU Scheduler', 'Memory Manager', 'Process Tree', 'Event Monitor', 'Simulation Archive', 'Settings']) expect(screen.getByRole('link', { name: new RegExp(label) })).toBeInTheDocument()
+    render(<MemoryRouter initialEntries={['/overview']}><App /></MemoryRouter>)
+    for (const label of ['Overview', 'Processes', 'CPU Scheduler', 'Memory Manager', 'Process Tree', 'Event Monitor', 'Simulation Archive', 'Settings']) expect(await screen.findByRole('link', { name: new RegExp(label) })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('link', { name: /Process Tree/ })); expect(await screen.findByRole('heading', { name: 'Process tree' })).toBeInTheDocument()
   }, 15000)
+
+  it.each(['/processes', '/memory'])('returns from %s to the existing landing page through the internal logo', async (route) => {
+    render(<MemoryRouter initialEntries={[route]}><App /></MemoryRouter>)
+    const brand = await screen.findByRole('link', { name: 'KernelX home' })
+    expect(brand).toHaveAttribute('href', '/')
+    fireEvent.click(brand)
+    expect(await screen.findByRole('heading', { name: /Inside the machine/i })).toBeInTheDocument()
+  }, 15000)
+
+  it('shows the new landing route and enters the existing overview', async () => {
+    render(<MemoryRouter initialEntries={['/']}><App /></MemoryRouter>)
+    expect(await screen.findByRole('heading', { name: /Inside the machine/i })).toBeInTheDocument()
+    expect(screen.getByRole('main')).toHaveClass('landing-cinematic-page')
+    expect(screen.getByRole('link', { name: /Skip tour/i })).toHaveAttribute('href', '/overview')
+    expect(screen.getByText(/Scroll to explore/i)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('link', { name: /Skip tour/i }))
+    expect(await screen.findByRole('heading', { name: 'System overview' })).toBeInTheDocument()
+  }, 15000)
+
+  it('offers the final cinematic call to action at the end of the tour', () => {
+    render(<MemoryRouter><LandingStoryOverlay stage={5} /></MemoryRouter>)
+    expect(screen.getByRole('heading', { name: /The work is done.*Now see the whole machine/i })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Enter KernelX/i })).toHaveAttribute('href', '/overview')
+  })
 })

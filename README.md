@@ -2,7 +2,7 @@
 
 KernelX is a DSA-centered operating system scheduling simulator. The backend now includes custom data structures, a deterministic simulation engine, JSON persistence, and REST APIs. It deliberately simulates CPU and memory; it does not report measurements from the host computer.
 
-> **Status:** Phases 1–4, CPU Internals Phases 5A–5F, and Phases 6A–6E are implemented. Phase 7C stability review is partially verified; remaining browser checks and readiness findings are recorded in [PHASE7C_REPORT.md](PHASE7C_REPORT.md).
+> **Status:** Phases 1–4, CPU Internals Phases 5A–5F, and Phases 6A–6E are implemented. Phase 7C stability review is partially verified; remaining browser checks and readiness findings are recorded in [PHASE7C_REPORT.md](PHASE7C_REPORT.md). Phase 8.5 replaces the landing-page low-poly scene with an original cinematic hardware environment. The internal application now has a separately scoped graphite/lime theme and its KERNELX logo links to `/`; see [PHASE8_3_REPORT.md](PHASE8_3_REPORT.md) for the internal redesign scope and verification limits.
 
 ## Features
 
@@ -43,7 +43,8 @@ frontend/
 ├── src/hooks/            # Controlled backend polling
 ├── src/layouts/          # Persistent sidebar/topbar shell
 ├── src/pages/            # Overview, Processes, Workload Studio, Analytics, Scheduler, Memory and tools
-└── src/styles.css        # Graphite/cloud/yellow design system
+├── src/styles.css        # Existing component styles
+└── src/design-system.css # Shared Phase 8 design tokens and layout refinements
 backend/
 ├── data/
 │   ├── simulations.json
@@ -79,6 +80,10 @@ FRONTEND_API_MAPPING.md
 - Jakarta Bean Validation and JUnit 5
 - React 18, TypeScript, Vite, Tailwind CSS, React Router, Axios, Recharts, Lucide React, Three.js, React Three Fiber and Drei
 
+## Landing page, design system and usability refinement (Phases 8–8.5)
+
+The public route `/` is a scroll-controlled cinematic tour through a real-time Three.js semiconductor environment. Its layered processor package, physical circuit traces, mounted DSA subsystem assemblies and thick glass conduit meshes are illustrative only; packets do not represent live backend processes. Scroll progress interpolates the camera through one continuous scene; small packets follow sampled 3D curves. Chapter titles crossfade smoothly and reversibly with that same scroll progress. Studio reflections and graphite/off-white lighting reveal the existing hardware while keeping yellow accents restrained. Reduced-motion preferences replace continuous animation with demand rendering tied to user scroll. Both Skip tour and Enter KernelX navigate to `/overview`; simulator behavior and data remain unchanged. Typography uses Space Grotesk for headings, Inter for body text, and JetBrains Mono for technical labels. See [PHASE8_3_REPORT.md](PHASE8_3_REPORT.md) and [PHASE8_5_REPORT.md](PHASE8_5_REPORT.md) for implementation, limitations and verification.
+
 ## Algorithm Comparison (Phase 6B)
 
 Open **Algorithm Comparison** from the navigation, choose a saved workload or built-in template, and select FCFS, SJF, Round Robin quantum variants, and either Priority mode. The backend snapshots the workload and creates a fresh `SchedulingService` (with fresh trace recorders) for each selected configuration. It invokes the existing Java algorithms and never reads or mutates the active simulation runtime.
@@ -103,7 +108,7 @@ Completed reports are persisted separately in `experiments.json`; the API writes
 
 ## Run on Windows (PowerShell)
 
-Required: JDK 21 and Maven 3.9+ for the backend; Node.js 20.19+ and npm for the frontend. Application port defaults to **8081** and can be changed with `SERVER_PORT`. Storage defaults to `backend/data/` relative to the backend working directory; use `KERNELX_DATA_DIRECTORY` to choose another path.
+Required: JDK 21 and Maven 3.9+ for the backend; Node.js 20.19+ and npm for the frontend. Application port defaults to **8083** and can be changed with `SERVER_PORT`. Storage defaults to `backend/data/` relative to the backend working directory; use `KERNELX_DATA_DIRECTORY` to choose another path.
 
 In this Codex shell, inherited PATH still selects Java 8 and does not contain Maven. For the verified build, JDK 21.0.13 was used with Apache Maven 3.9.11 in the Windows temp directory. Set these paths in PowerShell if needed:
 
@@ -123,16 +128,16 @@ cd C:\Users\atsid\OneDrive\Desktop\KernelX\backend
 mvn test
 ```
 
-Start the API on port 8081:
+Start the API on port 8083:
 
 ```powershell
 cd C:\Users\atsid\OneDrive\Desktop\KernelX\backend
 mvn spring-boot:run
 ```
 
-Health check: `http://localhost:8081/api/health`.
+Health check: `http://localhost:8083/api/health`.
 
-If 8081 is occupied, use another port:
+To override the default port:
 
 ```powershell
 $env:SERVER_PORT = '8082'
@@ -177,7 +182,7 @@ Phase 4 and CPU Internals Phases 5A–5F are complete. CPU Internals includes th
 
 ## Frontend (Phase 4)
 
-All eight pages are Overview, Processes, CPU Scheduler, Memory Manager, Process Tree, Event Monitor, Simulation Archive and Settings. Deep Graphite `#20221F` dominates the canvas and panels; Soft Cloud White `#F3F2EC` supports readable text and select controls; Sunshine Yellow `#F5D547` marks primary actions, active simulation cues and allocations. Scheduler and memory visualizations render actual backend data. See [FRONTEND_API_MAPPING.md](FRONTEND_API_MAPPING.md) for each integration and capability limit.
+The simulator includes Overview, Processes, CPU Scheduler, Memory Manager, Process Tree, Event Monitor, Simulation Archive, Workload Studio, Algorithm Comparison, System Analytics, Experimentation Lab, CPU Internals and Settings. The Phase 8 landing page is at `/`; use `/overview` for the existing simulator dashboard. Scheduler and memory visualizations render actual backend data. See [FRONTEND_API_MAPPING.md](FRONTEND_API_MAPPING.md) for each integration and capability limit.
 
 Install and run from Windows PowerShell:
 
@@ -188,7 +193,7 @@ Copy-Item .env.example .env
 npm run dev
 ```
 
-Open `http://localhost:5173`. To use a backend on 8082, set `VITE_API_BASE_URL=http://localhost:8082` in `frontend/.env` before starting Vite. In another terminal start the backend using the PowerShell setup commands above. Frontend checks:
+Open `http://localhost:5173`. The frontend defaults to the backend at `http://localhost:8083`; set `VITE_API_BASE_URL` in `frontend/.env` if using another port. In another terminal start the backend using the PowerShell setup commands above. Frontend checks:
 
 ```powershell
 npm run typecheck

@@ -1,8 +1,8 @@
 # KernelX REST API
 
-Base URL: `http://localhost:8081`. Content type is `application/json` for requests with bodies. CORS allows `http://localhost:5173` for `/api/**`.
+Base URL: `http://localhost:8083`. Content type is `application/json` for requests with bodies. CORS allows local Vite development origins for `/api/**`.
 
-The Spring application defaults to port **8081**. Override it with `SERVER_PORT`, for example `$env:SERVER_PORT=8082`. JSON storage defaults to `backend/data/`; set `KERNELX_DATA_DIRECTORY` to another directory to move it. Total simulated memory defaults to 1024 units (`KERNELX_TOTAL_MEMORY`). Memory is simulated and does not describe the host computer.
+The Spring application defaults to port **8083**. Override it with `SERVER_PORT`, for example `$env:SERVER_PORT=8082`. JSON storage defaults to `backend/data/`; set `KERNELX_DATA_DIRECTORY` to another directory to move it. Total simulated memory defaults to 1024 units (`KERNELX_TOTAL_MEMORY`). Memory is simulated and does not describe the host computer.
 
 ## Response and error format
 
@@ -286,7 +286,7 @@ Delete a configuration. Returns `204`; errors: `404` unknown ID.
 ## PowerShell examples
 
 ```powershell
-$base = 'http://localhost:8081'
+$base = 'http://localhost:8083'
 $process = Invoke-RestMethod -Method Post -Uri "$base/api/processes" -ContentType 'application/json' -Body '{"pid":1001,"name":"worker","priority":5,"arrivalTime":0,"burstTime":6,"memoryRequirement":128}'
 Invoke-RestMethod -Method Post -Uri "$base/api/simulation/start" -ContentType 'application/json' -Body '{"algorithm":"ROUND_ROBIN","timeQuantum":2,"preemptivePriority":false,"memoryAllocationStrategy":"FIRST_FIT"}'
 Invoke-RestMethod -Method Post -Uri "$base/api/simulation/step" -ContentType 'application/json' -Body '{"ticks":20}'

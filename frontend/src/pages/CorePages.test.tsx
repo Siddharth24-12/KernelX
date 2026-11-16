@@ -7,9 +7,9 @@ import { Gantt, SchedulerPage } from './SchedulerPage'
 import type { useSystemData } from '../hooks/useSystemData'
 import type { MemorySnapshot, ProcessRecord } from '../types/api'
 
-const { allocateMock, deallocateMock, createMock, listMock, startMock, scheduleMock } = vi.hoisted(() => ({ allocateMock: vi.fn(), deallocateMock: vi.fn(), createMock: vi.fn(), listMock: vi.fn(), startMock: vi.fn(), scheduleMock: vi.fn() }))
+const { allocateMock, deallocateMock, createMock, listMock, priorityMock, startMock, scheduleMock } = vi.hoisted(() => ({ allocateMock: vi.fn(), deallocateMock: vi.fn(), createMock: vi.fn(), listMock: vi.fn(), priorityMock: vi.fn(), startMock: vi.fn(), scheduleMock: vi.fn() }))
 vi.mock('../api/memory', () => ({ memoryApi: { get: vi.fn(), allocate: allocateMock, deallocate: deallocateMock } }))
-vi.mock('../api/processes', () => ({ processesApi: { list: listMock, get: vi.fn(), create: createMock, remove: vi.fn(), priority: vi.fn(), pause: vi.fn(), resume: vi.fn() } }))
+vi.mock('../api/processes', () => ({ processesApi: { list: listMock, get: vi.fn(), create: createMock, remove: vi.fn(), priority: priorityMock, pause: vi.fn(), resume: vi.fn() } }))
 vi.mock('../api/simulation', () => ({ simulationApi: { schedule: scheduleMock, start: startMock, pause: vi.fn(), resume: vi.fn(), step: vi.fn(), reset: vi.fn(), state: vi.fn(), gantt: vi.fn(), events: vi.fn() } }))
 
 const process: ProcessRecord = { pid: 11, name: 'pager', priority: 5, arrivalTime: 0, burstTime: 6, remainingTime: 6, memoryRequirement: 200, parentPid: -1, state: 'READY', completionTime: -1, waitingTime: 0, turnaroundTime: -1, responseTime: -1 }
@@ -37,10 +37,39 @@ describe('core workspace pages', () => {
     createMock.mockResolvedValue({ ...process, pid: 12, name: 'worker' })
     renderWithContext(<ProcessesPage />)
     fireEvent.click(screen.getByRole('button', { name: 'New process' }))
-    fireEvent.change(screen.getByLabelText('Process ID'), { target: { value: '12' } })
-    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'worker' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Insert process' }))
+    fireEvent.change(screen.getByRole('spinbutton', { name: /Process ID/ }), { target: { value: '12' } })
+    fireEvent.change(screen.getByRole('textbox', { name: /Name/ }), { target: { value: 'worker' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Create process' }))
     await waitFor(() => expect(createMock).toHaveBeenCalledWith({ pid: 12, name: 'worker', priority: 5, arrivalTime: 0, burstTime: 5, memoryRequirement: 128, parentPid: -1 }))
+  })
+
+  it('keeps empty numeric input blank and accepts valid zero priority and arrival values', async () => {
+    createMock.mockResolvedValue({ ...process, pid: 12, priority: 0, arrivalTime: 0 })
+    renderWithContext(<ProcessesPage />)
+    fireEvent.click(screen.getByRole('button', { name: 'New process' }))
+    const pid = screen.getByRole('spinbutton', { name: /Process ID/ })
+    fireEvent.change(pid, { target: { value: '' } })
+    expect(pid).toHaveValue(null)
+    fireEvent.change(pid, { target: { value: '12' } })
+    fireEvent.change(screen.getByRole('textbox', { name: /Name/ }), { target: { value: 'worker' } })
+    fireEvent.change(screen.getByRole('spinbutton', { name: /Priority/ }), { target: { value: '0' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Create process' }))
+    await waitFor(() => expect(createMock).toHaveBeenCalledWith({ pid: 12, name: 'worker', priority: 0, arrivalTime: 0, burstTime: 5, memoryRequirement: 128, parentPid: -1 }))
+  })
+
+  it('supports priority editing and cancelling without submitting', async () => {
+    renderWithContext(<ProcessesPage />)
+    fireEvent.click(screen.getByRole('button', { name: 'Edit priority for PID 11' }))
+    const priority = screen.getByRole('spinbutton', { name: 'Priority value' })
+    expect(priority).toHaveValue(5)
+    fireEvent.change(priority, { target: { value: '0' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(priorityMock).not.toHaveBeenCalled()
+    priorityMock.mockResolvedValue({ ...process, priority: 0 })
+    fireEvent.click(screen.getByRole('button', { name: 'Edit priority for PID 11' }))
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Priority value' }), { target: { value: '0' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save priority' }))
+    await waitFor(() => expect(priorityMock).toHaveBeenCalledWith(11, 0))
   })
 
   it('renders backend memory blocks and selects an allocation for inspection', () => {

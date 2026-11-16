@@ -71,7 +71,7 @@ Phase 6E verification on Java 21.0.13 / Maven 3.10.0: `mvn test` — **66 tests,
 - `SimulationRuntimeService` is the singleton API boundary for one session. Its synchronized methods serialize process mutations, ticks, and snapshots. Process and memory edits are rejected while a run is active/paused so the start-time scheduling plan remains consistent.
 - `@RestControllerAdvice` returns one error DTO and maps invalid input to 400, missing resources to 404, invalid lifecycle/resource conflicts to 409, and storage/unexpected failures to a generic 500 response without stack traces.
 - Central CORS policy allows the future Vite origin `http://localhost:5173`.
-- `server.port` defaults to 8081 and can be changed with `SERVER_PORT`.
+- `server.port` defaults to 8083 and can be changed with `SERVER_PORT`.
 
 ## Architecture
 
@@ -95,7 +95,7 @@ The simulation engine remains independent of Spring. The REST layer reads DTO sn
 - Stack: React 18, TypeScript, Vite, Tailwind CSS, React Router, Axios, Recharts and Lucide React.
 - `frontend/src/api/` centralizes HTTP requests, DTO interfaces and API error parsing. Configure the API through `VITE_API_BASE_URL`; see `frontend/.env.example`.
 - `frontend/src/hooks/useSystemData.ts` polls processes, memory, simulation state and events in one non-overlapping batch every 3.5 seconds. The interval is cleared when the shell unmounts.
-- `frontend/src/layouts/AppShell.tsx` owns the responsive navigation and status bar. All eight page routes are functional and lazy loaded.
+- `frontend/src/layouts/AppShell.tsx` owns the responsive navigation and status bar. Simulator routes are functional and lazy loaded; `/` is the landing experience and `/overview` is the dashboard.
 - Overview reads actual process counts, simulation status/time, memory blocks, execution segments and persistent events. It does not claim physical CPU utilization.
 - Processes supports create, search, state filtering, sorting, detail inspection, priority change, pause/resume and confirmed terminate. Mutations respect the backend's active-run lock.
 - Scheduler supports FCFS, SJF, Round Robin and Priority, priority preemption, RR quantum, start/pause/resume/step/reset, backend Gantt segments and scheduling metrics. It does not calculate a schedule in TypeScript.
@@ -104,10 +104,24 @@ The simulation engine remains independent of Spring. The REST layer reads DTO sn
 - Event Monitor displays only backend events, chronologically ordered by simulation time and event ID, with text, event-type and PID filters.
 - Simulation Archive implements list/save/load/delete for simulations and configurations. Snapshot load is read-only because the backend has no restore-to-runtime operation. Destructive actions use confirmation dialogs.
 - Settings reports the API URL/health and saves browser-local scheduler defaults, which Scheduler applies when opened.
-- Deep Graphite `#20221F` dominates the canvas and panels, Soft Cloud White `#F3F2EC` carries readable text and selected controls, and Sunshine Yellow `#F5D547` is reserved for primary actions, active simulation cues and allocations. Restrained palette-derived neutrals provide depth and separation.
+- The internal application theme is scoped under `.app-frame` in `frontend/src/internal-theme.css`: near-black graphite `#0B0D0C`, warm charcoal surfaces, off-white `#F1F0E8`, selective lime `#C7F36B`, and restrained amber `#D6A66A`. The stylesheet is imported by the internal shell and does not alter the `/` landing route.
 - The application is responsive, uses accessible labels/focus states, lazy-loads page bundles, and provides loading, empty, disconnected, conflict and success feedback.
 - Navigation links point to implemented routes; the app uses the official KernelX palette and retains the four verified core pages.
 - See `FRONTEND_API_MAPPING.md` for exact endpoint/method/body/response mappings and capability limits.
+
+## Phase 8 landing and design refinement
+
+The internal application shell uses an isolated dark theme in `frontend/src/internal-theme.css`. Internal navigation keeps the simulator dashboard at `/overview`; clicking the accessible KERNELX brand link navigates to the existing landing page at `/` through React Router. The internal theme styles shared shell/page components and CPU Internals chrome without changing backend APIs or data logic. See the internal redesign section in [PHASE8_3_REPORT.md](PHASE8_3_REPORT.md) for scope, changed files and verification limitations.
+
+- The root route `/` is a scroll-controlled cinematic landing tour; `/overview` remains the simulator dashboard. Phase 8.5 replaces the landing route's low-poly mesh treatment with a modeled Three.js environment: layered processor package, raised circuit traces, mounted DSA hardware and thick glass conduits. The environment is explicitly illustrative and is not live process data. Reduced-motion preferences switch the Canvas to demand rendering. The `/overview` route and its API-backed CPU Internals scene continue to use their existing Three.js code.
+- The Phase 8.3 title cards remain mounted together and their opacity and small vertical offset are derived from the same normalized scroll progress as the camera. Outgoing copy fades before incoming copy appears, so titles do not overlap; the short transition is reversible without adding a second animation clock. Only the chapter selected by the existing stage state remains interactive. The environment uses a studio PMREM reflection and balanced graphite, off-white and restrained warm/yellow lighting to make the existing hardware legible; its geometry and subsystem layout are unchanged.
+- Shared design tokens live in `frontend/src/design-system.css` and are imported after the existing component styles. The palette uses deep graphite, soft cloud text, mint technical states and limited amber emphasis. Space Grotesk, Inter and JetBrains Mono are loaded from the existing Google Fonts link in `frontend/index.html`. Buttons have layered glass surfaces and visible focus treatment.
+- The sidebar's middle navigation region scrolls independently. Desktop collapse retains titled icon links, while mobile navigation opens as an overlay; Settings is pinned as the final navigation item.
+- New Process inputs are held as strings and validated at submit time. PID, CPU burst and memory requirement must be positive integers; arrival time permits zero; priority permits 0–10; parent `-1` selects a root. Empty strings remain empty while editing.
+- The process edit dialog updates priority through the existing `PATCH /api/processes/{pid}/priority` API. Other process properties are read-only because the current backend has no general PCB update operation.
+- Archive simulation records are historical, read-only snapshots. The archive API does not restore snapshots into the live runtime. Loading a saved configuration applies only scheduler preferences in browser storage.
+- Phase 8 verification commands are unchanged: from `backend/`, run `mvn test`; from `frontend/`, run `npm test`, `npm run typecheck`, and `npm run build`; from the project root, run `git diff --check`.
+- Phase 8.1 baseline findings are in `PHASE8_1_REPORT.md`; the Phase 8.2 DSA machine, analytics typography, button and validation details are in `PHASE8_2_REPORT.md`.
 
 ## Files added or changed in Phase 3
 
@@ -149,7 +163,7 @@ Copy-Item .env.example .env
 npm run dev
 ```
 
-Vite serves `http://localhost:5173`. If the API uses port 8082, change `VITE_API_BASE_URL` to `http://localhost:8082` in `frontend/.env` before starting Vite. Run frontend verification from `frontend/`:
+Vite serves `http://localhost:5173`. The frontend defaults to the API at `http://localhost:8083`; change `VITE_API_BASE_URL` in `frontend/.env` when using a different backend port. Run frontend verification from `frontend/`:
 
 ### Backend CORS
 
@@ -189,23 +203,23 @@ cd C:\Users\atsid\OneDrive\Desktop\KernelX\backend
 mvn test
 ```
 
-Start on the Phase 3 default port (8081):
+Start on the default port (8083):
 
 ```powershell
 cd C:\Users\atsid\OneDrive\Desktop\KernelX\backend
 mvn spring-boot:run
 ```
 
-Health check: `http://localhost:8081/api/health`.
+Health check: `http://localhost:8083/api/health`.
 
-If the port is already in use, set a different one:
+To override the default port, set a different one:
 
 ```powershell
 $env:SERVER_PORT = '8082'
 mvn spring-boot:run
 ```
 
-In this environment, port 8081 was occupied. The app was started on 8082; `GET /api/health` returned HTTP 200 with `status: UP`, and `GET /api/memory` returned the initialized simulated memory map.
+The previous default, port 8081, may already be occupied by another local instance. The app now defaults to 8083; confirm the port is free or set `SERVER_PORT` to another available port. A port-binding failure occurs after compilation and is distinct from a source-code build failure. The earlier isolated runtime audit used port 8082; `GET /api/health` returned HTTP 200 with `status: UP`.
 
 The running application writes to `backend/data/` when started from the backend directory. For an alternate path, set `$env:KERNELX_DATA_DIRECTORY = 'C:\path\to\kernelx-data'` before startup.
 
@@ -230,9 +244,27 @@ The API integration tests use real Spring controllers, services, runtime, Jackso
 1. Backend foundation and DSA — complete.
 2. Simulation engine — complete.
 3. JSON persistence and REST API — complete.
-4. Frontend foundation and all eight pages — complete.
+4. Frontend foundation and simulator routes — complete; Phase 8 landing route `/` and UI refinement documented in `PHASE8_REPORT.md`.
 5. CPU internals visualization — Phases 5A–5F complete.
 6. Workload Studio, Algorithm Comparison, System Analytics, Experimentation Lab and final integration — Phases 6A–6E complete.
 7. Final documentation and demo workflow — deferred.
 
 Phases 4, 5A–5F and 6A–6E are complete. The FPB records only actual FCFS/Round Robin ready-queue operations. The PTU records actual operations in the live custom process forest. Both are bounded, in-memory diagnostic histories and do not persist across restart. Phase 6C analytics history is also bounded in memory; Phase 6D experiment reports use a separate JSON file.
+
+## Phase 8.1 — Landing page
+
+The `/` route is a single-screen entry experience with no scroll-stage narrative. Its React Three Fiber scene loops process packets through labeled input, scheduler, CPU execution, memory and completion areas. The scene loads lazily, uses a static CSS pipeline fallback when WebGL cannot render, and freezes packet and camera/core animation when `prefers-reduced-motion` is enabled. On narrow screens, the introduction, entry link and scene stack vertically. Run the frontend checks from `frontend/`: `npm test`, `npm run typecheck`, and `npm run build`. See `PHASE8_1_REPORT.md` for the results from this refinement.
+
+## Phase 8.2 — Illustrative DSA machine and visual system
+
+The landing Canvas maps the custom linked list, FIFO queue, max heap, separate-chaining hash table and first-child/next-sibling process tree into glass chambers and branching tubes. These paths connect to a central four-unit CPU chamber, memory cells and completion output. Packets, scheduler waiting, heap direction, bucket collision routing, tree links, core activity, and memory fill are looped visual demonstrations only; they are labeled “illustrative / not live data.” Live DSA workbench panels remain API-backed and unchanged. Geometry and materials are local Three.js primitives; the existing Drei `Html` overlay remains in use for readable node labels, and the Canvas stays lazy-loaded.
+
+Typography tokens are defined in `frontend/src/design-system.css`: Space Grotesk headings, Inter body copy, JetBrains Mono technical values, and shared sizes for titles, sections, body, labels, tables and metrics. Those fonts are already loaded in `frontend/index.html`; Tailwind tokens now use the same palette. Glass button variants are CSS classes (`button-primary`, `button-secondary`, `button-danger`, `icon-button`) with a top highlight, beveled border, layered shadow, hover lift, pressed state and focus ring.
+
+System Analytics had no page-specific layout rules in the stylesheet despite relying on analytics class names in its JSX; the root `--display` and `--mono` tokens also selected the wrong display/mono families. The Phase 8.2 styles place metric labels, values and descriptions in separate grid rows, use responsive two-column section layouts, provide explicit grids for lifecycle events and historical metric pairs, enlarge chart labels and empty-state notes, and preserve horizontal scrolling for wide tables. Analytics still reads the same actual CPU samples, memory snapshot, process table, persisted events and comparison reports; no analytics data was fabricated.
+
+## Phase 8.5 — Cinematic hardware landing
+
+The current `/` route uses a lazily loaded React Three Fiber scene; no raster artwork is used as the environment or as a texture. The board is a layered physical assembly with a beveled semiconductor package, four execution tiles, raised gold trace geometry, instanced edge contacts and mounting hardware. The linked list, max heap, hash buckets, FIFO buffer, process tree and allocation banks are spatial assemblies mounted on that board. Catmull-Rom paths become thick TubeGeometry glass shells, inner metal filaments and collar fittings; small capsule meshes follow pre-sampled points on those 3D curves.
+
+Six camera waypoints and matching look targets are smoothly interpolated from scroll progress. Pointer position adds a small bounded target offset. The WebGL canvas is capped at 1.5 device pixel ratio, reduced to 1 on compact/reduced-motion devices, paused while hidden, and uses one shadow-casting key light with no post-processing. Reduced-motion mode switches to demand rendering and updates from scroll/pointer input. A static system map is the WebGL fallback. All animation is illustrative; the landing makes no simulator/API calls. Run the frontend from `frontend/` with `npm run dev -- --host 127.0.0.1 --port 5174`; the backend remains on its configured port (8083 by default). Verification and any remaining visual limitations are recorded in `PHASE8_5_REPORT.md`.
